@@ -1,7 +1,6 @@
 # talos
 
-[![Build Status](https://travis-ci.org/noobOriented/talos.svg?branch=master)](https://travis-ci.org/noobOriented/talos)
-
+[![CircleCI](https://circleci.com/gh/Yoctol/talos/tree/master.svg?style=svg)](https://circleci.com/gh/Yoctol/talos/tree/master)
 
 About this project...
 
