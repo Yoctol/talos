@@ -1,0 +1,12 @@
+{
+  "generator-python3-package": {
+    "packageName": "talos",
+    "packageDesc": "Powerful Neural Network Builder",
+    "fullName": "Jsaon",
+    "pypiUserName": "jsaon",
+    "githubUserName": "noobOriented",
+    "email": "jsaon@yoctol.com",
+    "useTravisCI": "true",
+    "version": "0.3.0"
+  }
+}
