@@ -7,7 +7,7 @@ from ..initializers import INITIALIZERS
 class Dense:
 
     def __new__(
-            self,
+            cls,
             units,
             activation: str = 'linear',
             use_bias: bool = True,
