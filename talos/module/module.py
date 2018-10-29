@@ -27,9 +27,16 @@ class Module(abc.ABC):
     def call(self, x: tf.Tensor) -> tf.Tensor:
         pass
 
+    @property
     def trainable_variables(self):
         return list(chain.from_iterable(
             layer.trainable_variables for layer in self.sub_layers)
+        )
+
+    @property
+    def updates(self):
+        return list(chain.from_iterable(
+            layer.updates for layer in self.sub_layers)
         )
 
 
