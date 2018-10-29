@@ -6,8 +6,8 @@ import tensorflow as tf
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
 
-def get_sn_kernel(
-        layer,
+def _get_sn_kernel(
+        layer: tf.layers.Layer,
         kernel: tf.Variable,
         eps: float = 1e-8,
     ) -> tf.Variable:
@@ -18,7 +18,7 @@ def get_sn_kernel(
         kernel_matrix = kernel
 
     u_vector = layer.add_variable(
-        name=f'{kernel.op.name}/u_vector',
+        name=f'{kernel.op.name}/singular_vector',
         shape=(kernel_matrix.shape[0], 1),
         initializer=tf.truncated_normal_initializer(),
         trainable=False,
@@ -40,7 +40,8 @@ def add_spectral_norm(
         layer: tf.layers.Layer,
         kernel_attribute_name: Set[str] = None,
     ):
-    assert not layer.built
+    # Very Evil HACK
+    assert not layer.built, "Can't add spectral norm on built layer!"
     original_build = layer.build
 
     def is_kernel_attr(key):
@@ -53,10 +54,34 @@ def add_spectral_norm(
         original_build(input_shapes)
         self.built = False
         kernels = {
-            key: get_sn_kernel(self, val)
-            for key, val in self.__dict__.items() if is_kernel_attr(key)
+            key: _get_sn_kernel(self, kernel)
+            for key, kernel in self.__dict__.items() if is_kernel_attr(key)
         }
         self.__dict__.update(kernels)
         self.built = True
 
     layer.build = types.MethodType(new_build, layer)
+
+
+def add_spectral_norm_v2(
+        layer: tf.layers.Layer,
+        kernel_name: Set[str] = None,
+    ):
+    # Very Evil HACK
+    assert not layer.built, "Can't add spectral norm on built layer!"
+
+    def is_kernel_var(name):
+        if kernel_name is not None:
+            return name in kernel_name
+        else:
+            return name.endswith(_WEIGHTS_VARIABLE_NAME)
+
+    original_add_variable = layer.add_variable
+
+    def new_add_variable(self, name, shape, **kwargs):
+        variable = original_add_variable(name, shape, **kwargs)
+        if is_kernel_var(name):
+            return _get_sn_kernel(self, variable)
+        return variable
+
+    layer.add_variable = types.MethodType(new_add_variable, layer)

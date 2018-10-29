@@ -1,11 +1,11 @@
 import tensorflow as tf
 
-from ..spectral_norm import add_spectral_norm
+from ..spectral_norm import add_spectral_norm_v2
 
 
 def test_spectral_norm_dense():
     dense_layer = tf.layers.Dense(10)
-    add_spectral_norm(dense_layer)
+    add_spectral_norm_v2(dense_layer)
 
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, 20])
     dense_layer(inputs)
@@ -16,7 +16,7 @@ def test_spectral_norm_dense():
 
 def test_spectral_norm_gru():
     gru_cell = tf.nn.rnn_cell.GRUCell(10)
-    add_spectral_norm(gru_cell)
+    add_spectral_norm_v2(gru_cell)
 
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, 20])
     state = tf.placeholder(dtype=tf.float32, shape=[None, gru_cell.state_size])
