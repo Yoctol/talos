@@ -17,7 +17,7 @@ class Module(abc.ABC):
 
     def __call__(self, x: tf.Tensor) -> tf.Tensor:
         if self.scope is not None:
-            with tf.variable(self.scope):
+            with tf.variable_scope(self.scope):
                 output = self.call(x)
         else:
             output = self.call(x)
