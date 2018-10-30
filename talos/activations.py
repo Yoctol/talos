@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-ACTIVATIONS = {
+_ACTIVATIONS = {
     'relu': tf.nn.relu,
     'lrelu': tf.nn.leaky_relu,
     'elu': tf.nn.elu,
@@ -12,3 +12,11 @@ ACTIVATIONS = {
     'linear': lambda x: x,
     None: None,
 }
+
+
+def get(activation_id: str):
+    try:
+        activation = _ACTIVATIONS[activation_id]
+        return activation
+    except KeyError:
+        raise KeyError(f"Unknown activation_id: {activation_id}")
