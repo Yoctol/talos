@@ -7,7 +7,8 @@ from ..layers import Dense
 
 @pytest.fixture(scope='module')
 def dense_layer():
-    return Dense(units=10)
+    with tf.Graph().as_default():
+        return Dense(units=10)
 
 
 def test_dense(dense_layer):
