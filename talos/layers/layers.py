@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from ..activations import ACTIVATIONS
-from ..initializers import INITIALIZERS
+from .. import activations
+from .. import initializers
 
 
 class Dense:
@@ -16,9 +16,9 @@ class Dense:
             trainable: bool = True,
             name: str = None,
         ):
-        activation = ACTIVATIONS[activation]
-        kernel_initializer = INITIALIZERS[kernel_initializer]
-        bias_initializer = INITIALIZERS[bias_initializer]
+        activation = activations.get(activation)
+        kernel_initializer = initializers.get(kernel_initializer)
+        bias_initializer = initializers.get(bias_initializer)
 
         return tf.layers.Dense(
             units=units,
