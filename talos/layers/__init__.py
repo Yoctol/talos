@@ -1,1 +1,6 @@
-from .layers import Dense
+from .layers import (
+    Dense,
+    Conv1D,
+    Conv2D,
+    Conv2DTranspose,
+)
