@@ -1,10 +1,16 @@
+import pytest
+
 import tensorflow as tf
 
 from ..spectral_norm import add_spectral_norm
 
 
-def test_spectral_norm_dense():
-    graph = tf.Graph()
+@pytest.fixture(scope="function")
+def graph():
+    return tf.Graph()
+
+
+def test_spectral_norm_dense(graph):
     with graph.as_default():
         dense_layer = tf.layers.Dense(10)
         add_spectral_norm(dense_layer)
@@ -19,8 +25,8 @@ def test_spectral_norm_dense():
     assert len(graph.get_collection(tf.GraphKeys.UPDATE_OPS)) == 1
 
 
-def test_spectral_norm_gru():
-    with tf.Graph().as_default():
+def test_spectral_norm_gru(graph):
+    with graph.as_default():
         gru_cell = tf.nn.rnn_cell.GRUCell(10)
         add_spectral_norm(gru_cell)
 
