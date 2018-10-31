@@ -2,17 +2,13 @@ import pytest
 
 import tensorflow as tf
 
-from ..layers import Conv1D, Dense
+from ..layers import Dense
 
 
 @pytest.fixture(scope='module')
 def dense_layer():
-    return Dense(units=10)
-
-
-@pytest.fixture(scope='module')
-def conv1d_layer():
-    return Conv1D(filters=10, kernel_size=3)
+    with tf.Graph().as_default():
+        return Dense(units=10)
 
 
 def test_dense(dense_layer):
@@ -40,9 +36,3 @@ def test_invalid_id_arguments():
         Dense(10, kernel_initializer="nonexistent")
     with pytest.raises(KeyError):
         Dense(10, bias_initializer="nonexistent")
-
-
-def test_conv1d(conv1d_layer):
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 5, 20])
-    outputs = conv1d_layer(inputs)
-    assert outputs.shape.as_list() == [None, 3, 10]
