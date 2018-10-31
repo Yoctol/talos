@@ -36,6 +36,7 @@ class Dense:
 class Conv1D:
 
     def __new__(
+            cls,
             filters: int,
             kernel_size: int,
             strides: int = 1,
@@ -72,6 +73,7 @@ class Conv1D:
 class Conv2D:
 
     def __new__(
+            cls,
             filters: int,
             kernel_size: int,
             strides: int = (1, 1),
@@ -108,6 +110,7 @@ class Conv2D:
 class Conv2DTranspose:
 
     def __new__(
+            cls,
             filters: int,
             kernel_size: int,
             strides: Tuple[int, int] = (1, 1),
