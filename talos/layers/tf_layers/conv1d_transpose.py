@@ -60,8 +60,8 @@ class Conv1DTranspose(Conv1D):
 
     def build(self, input_shape):
         if len(input_shape) != 3:
-            raise ValueError('Inputs should have rank 3. Received input shape: ' +
-                             str(input_shape))
+            raise ValueError(
+                f'Inputs should have rank 3. Received input shape: {str(input_shape)}')
         if self.data_format == 'channels_first':
             channel_axis = 1
         else:
