@@ -6,12 +6,17 @@ RECURRENT_CELL_TYPE = Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tenso
 
 
 def _get_init_state(cell, inputs):
-    batch_size = tf.shape(inputs)[0]
-    dtype = cell.dtype
-    if hasattr(cell, 'get_init_state'):
-        init_state = cell.get_init_state(batch_size=batch_size, dtype=dtype)
-    else:
+    batch_size = inputs.shape.as_list()[0]
+    dtype = inputs.dtype
+    if hasattr(cell, 'zero_state'):
         init_state = cell.zero_state(batch_size=batch_size, dtype=dtype)
+    elif hasattr(cell.state_size, '__len__'):
+        init_state = [
+            tf.zeros([batch_size, size], dtype=dtype)
+            for size in cell.state_size
+        ]
+    else:
+        init_state = [tf.zeros([batch_size, cell.state_size], dtype=dtype)]
     return init_state
 
 
@@ -29,8 +34,8 @@ def dynamic_decode(
             init_state = _get_init_state(cell, first_input)
         except AttributeError:
             raise ValueError(
-                "Cell should support get_init_state or zero_state method."
-                "otherwise, init_state should be given")
+                "Cell should support `zero_state` or `state_size`."
+                "otherwise, `init_state` should be given")
 
     inputs = first_input
     state = init_state
