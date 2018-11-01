@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from tensorflow.python.eager import context
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.layers import base
@@ -31,12 +27,11 @@ class Conv1DTranspose(Conv1D):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
-            use_spectral_norm=False,
             trainable=True,
             name=None,
             **kwargs
         ):
-        super(Conv1DTranspose, self).__init__(
+        super().__init__(
             filters,
             kernel_size,
             strides=strides,
@@ -56,43 +51,45 @@ class Conv1DTranspose(Conv1D):
             **kwargs
         )
         self.input_spec = base.InputSpec(ndim=3)
-        self.use_spectral_norm = use_spectral_norm
 
     def build(self, input_shape):
         if len(input_shape) != 3:
             raise ValueError(
-                f'Inputs should have rank 3. Received input shape: {str(input_shape)}')
+                f'Inputs should have rank 3. Received input shape: {str(input_shape)}'
+            )
         if self.data_format == 'channels_first':
             channel_axis = 1
         else:
             channel_axis = -1
         if input_shape[channel_axis] is None:
-            raise ValueError('The channel dimension of the inputs '
-                             'should be defined. Found `None`.')
+            raise ValueError(
+                'The channel dimension of the inputs should be defined. Found `None`.'
+            )
         input_dim = input_shape[channel_axis]
         self.input_spec = base.InputSpec(ndim=3, axes={channel_axis: input_dim})
         kernel_shape = self.kernel_size + (self.filters, input_dim)
 
-        self.kernel = self.add_variable(name='kernel',
-                                        shape=kernel_shape,
-                                        initializer=self.kernel_initializer,
-                                        regularizer=self.kernel_regularizer,
-                                        constraint=self.kernel_constraint,
-                                        trainable=True,
-                                        dtype=self.dtype)
+        self.kernel = self.add_variable(
+            name='kernel',
+            shape=kernel_shape,
+            initializer=self.kernel_initializer,
+            regularizer=self.kernel_regularizer,
+            constraint=self.kernel_constraint,
+            trainable=True,
+            dtype=self.dtype,
+        )
         if self.use_bias:
-            self.bias = self.add_variable(name='bias',
-                                          shape=(self.filters,),
-                                          initializer=self.bias_initializer,
-                                          regularizer=self.bias_regularizer,
-                                          constraint=self.bias_constraint,
-                                          trainable=True,
-                                          dtype=self.dtype)
+            self.bias = self.add_variable(
+                name='bias',
+                shape=(self.filters,),
+                initializer=self.bias_initializer,
+                regularizer=self.bias_regularizer,
+                constraint=self.bias_constraint,
+                trainable=True,
+                dtype=self.dtype,
+            )
         else:
             self.bias = None
-
-        if self.use_spectral_norm:
-            self.kernel = self.get_sn_kernel(self.kernel, 'kernel')
 
         self.built = True
 
@@ -109,10 +106,12 @@ class Conv1DTranspose(Conv1D):
         stride_w = self.strides[0]
 
         # Infer the dynamic output shape:
-        out_width = utils.deconv_output_length(width,
-                                               kernel_w,
-                                               self.padding,
-                                               stride_w)
+        out_width = utils.deconv_output_length(
+            width,
+            kernel_w,
+            self.padding,
+            stride_w,
+        )
         if self.data_format == 'channels_first':
             output_shape = (batch_size, self.filters, out_width)
         else:
@@ -126,23 +125,27 @@ class Conv1DTranspose(Conv1D):
             output_shape_tensor,
             strides,
             padding=self.padding.upper(),
-            data_format=utils.convert_data_format(self.data_format, ndim=3))
+            data_format=utils.convert_data_format(self.data_format, ndim=3),
+        )
 
         if not context.executing_eagerly():
             # Infer the static output shape:
             out_shape = inputs.get_shape().as_list()
             out_shape[c_axis] = self.filters
-            out_shape[w_axis] = utils.deconv_output_length(out_shape[w_axis],
-                                                           kernel_w,
-                                                           self.padding,
-                                                           stride_w)
+            out_shape[w_axis] = utils.deconv_output_length(
+                out_shape[w_axis],
+                kernel_w,
+                self.padding,
+                stride_w,
+            )
             outputs.set_shape(out_shape)
 
         if self.use_bias:
             outputs = nn.bias_add(
                 outputs,
                 self.bias,
-                data_format=utils.convert_data_format(self.data_format, ndim=4))
+                data_format=utils.convert_data_format(self.data_format, ndim=4),
+            )
 
         if self.activation is not None:
             return self.activation(outputs)

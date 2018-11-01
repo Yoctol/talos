@@ -13,6 +13,9 @@ def test_conv1d_transpose():
     outputs = dconv1d(inputs)
 
     assert outputs.shape.as_list() == [None, width + dconv1d.kernel_size[0] - 1, dconv1d.filters]
+    config = dconv1d.get_config()
+    assert config['filters'] == 10
+    assert config['kernel_size'] == (5, )
 
 
 def test_conv1d_transpose_invalid_input():

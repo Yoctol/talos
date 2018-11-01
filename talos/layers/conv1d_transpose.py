@@ -1,10 +1,11 @@
-from .tf_layers.conv1d_transpose import Conv1DTranspose as tfConv1DTranspose
 from tensorflow.python.keras._impl.keras.engine import Layer
 from tensorflow.python.keras._impl.keras import activations
 from tensorflow.python.keras._impl.keras import backend as K
 from tensorflow.python.keras._impl.keras import constraints
 from tensorflow.python.keras._impl.keras import initializers
 from tensorflow.python.keras._impl.keras import regularizers
+
+from .tf_layers.conv1d_transpose import Conv1DTranspose as tfConv1DTranspose
 
 
 class Conv1DTranspose(tfConv1DTranspose, Layer):
@@ -29,7 +30,7 @@ class Conv1DTranspose(tfConv1DTranspose, Layer):
         ):
         if data_format is None:
             data_format = K.image_data_format()
-        super(Conv1DTranspose, self).__init__(
+        super().__init__(
             filters=filters,
             kernel_size=kernel_size,
             strides=strides,
@@ -64,5 +65,5 @@ class Conv1DTranspose(tfConv1DTranspose, Layer):
             'kernel_constraint': constraints.serialize(self.kernel_constraint),
             'bias_constraint': constraints.serialize(self.bias_constraint)
         }
-        base_config = super(Conv1DTranspose, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        base_config = super().get_config()
+        return {**base_config, **config}
