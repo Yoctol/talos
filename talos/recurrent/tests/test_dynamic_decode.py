@@ -8,7 +8,7 @@ from ..dynamic_decode import dynamic_decode
 def test_dynamic_decode_logic(mocker):
 
     def mock_cell_call(inputs, state):
-        return inputs + len(state), state + 's'
+        return chr(inputs + len(state)), state + 's'
 
     mock_cell = mocker.Mock(side_effect=mock_cell_call)
     first_input = ord('A')
@@ -17,7 +17,6 @@ def test_dynamic_decode_logic(mocker):
         cell=mock_cell,
         first_input=first_input,
         maxlen=5,
-        output_layer=lambda x: chr(x),
         next_input_producer=lambda c: ord(c),
         init_state='s',
     )
@@ -53,7 +52,6 @@ def test_dynamic_decode_tf():
             cell=cell,
             first_input=first_input,
             maxlen=10,
-            output_layer=lambda x: x,
             next_input_producer=next_input_producer,
             init_state=init_state,
         )

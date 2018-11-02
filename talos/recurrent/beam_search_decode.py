@@ -10,7 +10,6 @@ def beam_search_decode(
         first_input: tf.Tensor,
         maxlen: int,
         beam_width: int,
-        output_layer: Callable,
         next_input_producer: Callable,
         init_state: tf.Tensor = None,
     ):
@@ -32,8 +31,7 @@ def beam_search_decode(
     )  # shape (N, 1): 0, k, 2k....
 
     for t in range(maxlen):
-        cell_output, state = cell(inputs, state)  # shape (Nk, d_o), (Nk, d_s)
-        logits = output_layer(cell_output)  # shape (Nk, V)
+        logits, state = cell(inputs, state)  # shape (Nk, d_o), (Nk, d_s)
         num_classes = logits.shape[-1].value  # V
         if top_k_logprob is not None:
             top_k_logprob = tf.reshape(

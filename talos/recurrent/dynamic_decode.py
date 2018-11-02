@@ -27,7 +27,6 @@ def dynamic_decode(
         cell: RECURRENT_CELL_TYPE,
         first_input: tf.Tensor,
         maxlen: int,
-        output_layer: Callable,
         next_input_producer: Callable,
         init_state: tf.Tensor = None,
     ):
@@ -43,8 +42,7 @@ def dynamic_decode(
     output_list = []
 
     for _ in range(maxlen):
-        cell_output, state = cell(inputs, state)
-        output = output_layer(cell_output)
+        output, state = cell(inputs, state)
         output_list.append(output)
         inputs = next_input_producer(output)  # shape (N, E)
 

@@ -30,7 +30,6 @@ def test_beam_search_decode(graph, cell, dense_layer):
             first_input=first_input,
             maxlen=10,
             beam_width=3,
-            output_layer=lambda x: x,
             next_input_producer=lambda logits, _: dense_layer(logits),
         )
     assert output_logits.shape.as_list() == [batch_size, 10, 5]
@@ -47,7 +46,6 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
             first_input=first_input,
             maxlen=10,
             beam_width=3,
-            output_layer=lambda x: x,
             next_input_producer=lambda logits, _: dense_layer(logits),
             # init_state=init_state,
         )
