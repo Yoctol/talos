@@ -5,6 +5,9 @@ import tensorflow as tf
 from .dynamic_decode import RECURRENT_CELL_TYPE, _get_init_state
 
 
+_TIME_AXIS = 1
+
+
 def beam_search_decode(
         cell: RECURRENT_CELL_TYPE,
         first_input: tf.Tensor,
@@ -22,9 +25,7 @@ def beam_search_decode(
 
     inputs = first_input  # shape (N, d_i)
     state = init_state  # shape (N, d_s)
-    top_k_logprob = None
-    top_k_logits = None
-    top_k_word_ids = None
+    beam_score = beam_logits = beam_class_ids = None
     offset = tf.expand_dims(
         tf.range(batch_size) * beam_width,
         axis=1,
@@ -32,60 +33,60 @@ def beam_search_decode(
 
     for t in range(maxlen):
         logits, state = cell(inputs, state)  # shape (Nk, d_o), (Nk, d_s)
-        num_classes = logits.shape[-1].value  # V
-        if top_k_logprob is not None:
-            top_k_logprob = tf.reshape(
-                tf.reshape(
-                    top_k_logprob,
-                    shape=[-1, 1],
-                ) + tf.nn.log_softmax(logits),  # shape (Nk, 1) + (Nk, V) -> (Nk, V)
-                shape=[-1, beam_width * num_classes],
-            )  # shape (N, kV)
-        else:
-            top_k_logprob = tf.nn.log_softmax(logits)  # shape (N, V)
-        top_k_logprob, new_ids = tf.nn.top_k(
-            top_k_logprob,
-            k=beam_width,
-        )  # both shape (N, k)
-        # new_ids in range [0, V) (if t == 0) or [0, kV)
-
+        n_classes = logits.shape[-1].value
+        beam_score, expanded_ids = select_beam(beam_score, logits, beam_width, n_classes)
+        # both shape (N, k), expanded_ids in range [0, kV)
         if t > 0:
-            beam_ids = new_ids // num_classes  # shape (N, k), in range [0, k)
-            word_ids = tf.reshape(new_ids % num_classes, shape=[-1])
-            # flatten the indices to fit tf.gather
+            beam_ids = expanded_ids // n_classes  # shape (N, k), in range [0, k)
+            class_ids = expanded_ids % n_classes  # shape (N, k) in range [0, V)
+            # HACK flatten the indices to fit tf.gather
             flatten_ids = tf.reshape(
                 offset + beam_ids,  # shape (N, 1) + (N, k) -> (N, k)
                 shape=[-1],
-            )  # shape (Nk,): [0, k) * k, [k, 2k) * k....
-            logits = tf.gather(logits, flatten_ids)
-            state = nested_call(tf.gather, state, indices=flatten_ids)
-            top_k_logits = time_concat_on_selected_beam(top_k_logits, logits, flatten_ids)
-            top_k_word_ids = time_concat_on_selected_beam(top_k_word_ids, word_ids, flatten_ids)
+            )  # shape (Nk, ): k elements in [0, k), k elements in [k, 2k)...
+            logits, state, beam_logits, beam_class_ids = nested_call(
+                func=tf.gather,
+                nested_var=(logits, state, beam_logits, beam_class_ids),
+                indices=flatten_ids,
+            )
         else:
-            word_ids = tf.reshape(new_ids, shape=[-1])  # shape (Nk, )
-            logits = tile_batch(logits, beam_width)  # shape (Nk, V)
-            state = nested_call(tile_batch, state, multiplier=beam_width)  # shape (Nk, d_s)
-            top_k_logits = tf.expand_dims(logits, axis=1)  # shape (Nk, 1, V)
-            top_k_word_ids = tf.expand_dims(word_ids, axis=1)  # shape (Nk, 1)
+            class_ids = expanded_ids  # shape (N, k) in range [0, V)
+            logits, state = nested_call(
+                func=tile_batch,
+                nested_var=(logits, state),
+                multiplier=beam_width,
+            )
 
-        inputs = next_input_producer(logits, word_ids)  # shape (N, d_i)
+        class_ids = tf.reshape(class_ids, shape=[-1])
+        beam_logits = concat_on_time_axis(beam_logits, logits)
+        beam_class_ids = concat_on_time_axis(beam_class_ids, class_ids)
+
+        inputs = next_input_producer(logits, class_ids)  # shape (N, d_i)
 
     output_ids = tf.squeeze(offset)  # shape (N, )
-    output_logits = tf.gather(top_k_logits, output_ids)
-    output_word_ids = tf.gather(top_k_word_ids, output_ids)
+    output_logits = tf.gather(beam_logits, output_ids)
+    output_class_ids = tf.gather(beam_class_ids, output_ids)
 
-    return output_logits, output_word_ids
+    return output_logits, output_class_ids
 
 
-def time_concat_on_selected_beam(tensor, new_tensor, flatten_ids):
-    new_tensor = tf.expand_dims(new_tensor, axis=1)
+def select_beam(beam_score, new_logits, beam_width, n_classes):
+    new_score = tf.nn.log_softmax(new_logits)  # shape (Nk, V)
+    if beam_score is None:
+        expanded_score = new_score  # shape (N, V)
+    else:
+        # for broadcast: (Nk, 1) + (Nk, V) -> (Nk, V)
+        expanded_score = tf.reshape(beam_score, shape=[-1, 1]) + new_score
+        # expansion on last dimension (Nk, V) -> (N, kV)
+        expanded_score = tf.reshape(expanded_score, shape=[-1, beam_width * n_classes])
+    return tf.nn.top_k(expanded_score, k=beam_width)
+
+
+def concat_on_time_axis(tensor, new_tensor):
+    new_tensor = tf.expand_dims(new_tensor, axis=_TIME_AXIS)
     if tensor is None:
         return new_tensor
-    tensor = tf.gather(tensor, flatten_ids)
-    return tf.concat(
-        [tensor, new_tensor],
-        axis=1,
-    )  # shape (Nk, t, V)
+    return tf.concat([tensor, new_tensor], axis=_TIME_AXIS)  # shape (Nk, t, V)
 
 
 def nested_call(func, nested_var, *args, **kwargs):
