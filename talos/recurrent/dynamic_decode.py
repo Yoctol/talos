@@ -7,16 +7,22 @@ RECURRENT_CELL_TYPE = Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tenso
 
 def _get_init_state(cell, inputs):
     batch_size = inputs.shape.as_list()[0]
+    assert batch_size is not None
     dtype = inputs.dtype
     if hasattr(cell, 'zero_state'):
         init_state = cell.zero_state(batch_size=batch_size, dtype=dtype)
-    elif hasattr(cell.state_size, '__len__'):
-        init_state = [
-            tf.zeros([batch_size, size], dtype=dtype)
-            for size in cell.state_size
-        ]
+    elif hasattr(cell, 'state_size'):
+        if hasattr(cell.state_size, '__len__'):
+            init_state = [
+                tf.zeros([batch_size, size], dtype=dtype)
+                for size in cell.state_size
+            ]
+        else:
+            init_state = [tf.zeros([batch_size, cell.state_size], dtype=dtype)]
     else:
-        init_state = [tf.zeros([batch_size, cell.state_size], dtype=dtype)]
+        raise ValueError(
+            "Cell should support `zero_state` or `state_size`."
+            "otherwise, `init_state` should be given")
     return init_state
 
 
@@ -30,12 +36,7 @@ def dynamic_decode(
     ):
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
     if init_state is None:
-        try:
-            init_state = _get_init_state(cell, first_input)
-        except AttributeError:
-            raise ValueError(
-                "Cell should support `zero_state` or `state_size`."
-                "otherwise, `init_state` should be given")
+        init_state = _get_init_state(cell, first_input)
 
     inputs = first_input
     state = init_state
