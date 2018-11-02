@@ -2,7 +2,7 @@ from typing import Callable
 
 import tensorflow as tf
 
-from .dynamic_decode import RECURRENT_CELL_TYPE, _get_init_state
+from .chain_decode import RECURRENT_CELL_TYPE, get_default_init_state
 
 
 _TIME_AXIS = 1
@@ -21,7 +21,7 @@ def beam_search_decode(
     if batch_size is None:
         batch_size = tf.shape(first_input)[0]
     if init_state is None:
-        init_state = _get_init_state(cell, batch_size, first_input.dtype)
+        init_state = get_default_init_state(cell, batch_size, first_input.dtype)
 
     inputs = first_input  # shape (N, d_i)
     state = init_state  # shape (N, d_s)

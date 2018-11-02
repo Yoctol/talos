@@ -2,10 +2,10 @@ from unittest.mock import call
 
 import tensorflow as tf
 
-from ..dynamic_decode import dynamic_decode
+from ..chain_decode import chain_decode
 
 
-def test_dynamic_decode_logic(mocker):
+def test_chain_decode_logic(mocker):
 
     def mock_cell_call(inputs, state):
         return chr(inputs + len(state)), state + 's'
@@ -13,7 +13,7 @@ def test_dynamic_decode_logic(mocker):
     mock_cell = mocker.Mock(side_effect=mock_cell_call)
     first_input = ord('A')
     mocker.patch('tensorflow.stack', lambda lst, axis: ",".join(lst))
-    output = dynamic_decode(
+    output = chain_decode(
         cell=mock_cell,
         first_input=first_input,
         maxlen=5,
@@ -38,7 +38,7 @@ def test_dynamic_decode_logic(mocker):
     assert output == expected_output
 
 
-def test_dynamic_decode_tf():
+def test_chain_decode_tf():
     batch_size = 6
     with tf.Graph().as_default():
         cell = tf.nn.rnn_cell.LSTMCell(num_units=5)
@@ -48,7 +48,7 @@ def test_dynamic_decode_tf():
             tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),
         )
         next_input_producer = tf.keras.layers.Dense(units=3)
-        outputs = dynamic_decode(
+        outputs = chain_decode(
             cell=cell,
             first_input=first_input,
             maxlen=10,
