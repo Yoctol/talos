@@ -26,7 +26,7 @@ def beam_search_decode(
     top_k_logits = None
     top_k_word_ids = None
     offset = tf.expand_dims(
-        tf.range(0, batch_size) * beam_width,
+        tf.range(batch_size) * beam_width,
         axis=1,
     )  # shape (N, 1): 0, k, 2k....
 
@@ -46,8 +46,9 @@ def beam_search_decode(
         top_k_logprob, new_ids = tf.nn.top_k(
             top_k_logprob,
             k=beam_width,
-        )  # both shape (N, k), new_ids in range [0, kV)
-        # which beam from the last step to select.
+        )  # both shape (N, k)
+        # new_ids in range [0, V) (if t == 0) or [0, kV)
+
         if t > 0:
             beam_ids = new_ids // num_classes  # shape (N, k), in range [0, k)
             word_ids = tf.reshape(new_ids % num_classes, shape=[-1])
@@ -56,18 +57,18 @@ def beam_search_decode(
                 offset + beam_ids,  # shape (N, 1) + (N, k) -> (N, k)
                 shape=[-1],
             )  # shape (Nk,): [0, k) * k, [k, 2k) * k....
+            logits = tf.gather(logits, flatten_ids)
+            state = nested_call(tf.gather, state, indices=flatten_ids)
+            top_k_logits = time_concat_on_selected_beam(top_k_logits, logits, flatten_ids)
+            top_k_word_ids = time_concat_on_selected_beam(top_k_word_ids, word_ids, flatten_ids)
         else:
-            beam_ids = tf.zeros_like(new_ids)  # select first beam at the first time
-            word_ids = tf.reshape(new_ids, shape=[-1])
-            flatten_ids = tf.reshape(beam_ids, shape=[-1])  # shape (Nk,)
-        # select beam from logits
-        logits = tf.gather(logits, flatten_ids)
-
-        top_k_logits = time_concat_on_selected_beam(top_k_logits, logits, flatten_ids)
-        top_k_word_ids = time_concat_on_selected_beam(top_k_word_ids, word_ids, flatten_ids)
+            word_ids = tf.reshape(new_ids, shape=[-1])  # shape (Nk, )
+            logits = tile_batch(logits, beam_width)  # shape (Nk, V)
+            state = nested_call(tile_batch, state, multiplier=beam_width)  # shape (Nk, d_s)
+            top_k_logits = tf.expand_dims(logits, axis=1)  # shape (Nk, 1, V)
+            top_k_word_ids = tf.expand_dims(word_ids, axis=1)  # shape (Nk, 1)
 
         inputs = next_input_producer(logits, word_ids)  # shape (N, d_i)
-        state = nested_gather(state, flatten_ids)
 
     output_ids = tf.squeeze(offset)  # shape (N, )
     output_logits = tf.gather(top_k_logits, output_ids)
@@ -87,7 +88,16 @@ def time_concat_on_selected_beam(tensor, new_tensor, flatten_ids):
     )  # shape (Nk, t, V)
 
 
-def nested_gather(params, indices):
-    if hasattr(params, '__len__'):
-        return [nested_gather(p, indices) for p in params]
-    return tf.gather(params, indices)
+def nested_call(func, nested_var, *args, **kwargs):
+    if hasattr(nested_var, '__len__'):
+        return [nested_call(func, v, *args, **kwargs) for v in nested_var]
+    return func(nested_var, *args, **kwargs)
+
+
+def tile_batch(tensor, multiplier):
+    shape = tensor.shape
+    rank = shape.ndims
+    assert rank >= 1
+    tensor = tf.expand_dims(tensor, axis=1)
+    tensor = tf.tile(tensor, multiples=[1, multiplier] + [1] * (rank - 1))
+    return tf.reshape(tensor, shape=[-1] + shape.as_list()[1:])
