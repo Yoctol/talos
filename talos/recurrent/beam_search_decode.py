@@ -15,18 +15,17 @@ def beam_search_decode(
         init_state: tf.Tensor = None,
     ):
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
+    batch_size = first_input.shape[0].value
+    if batch_size is None:
+        batch_size = tf.shape(first_input)[0]
     if init_state is None:
-        init_state = _get_init_state(cell, first_input)
+        init_state = _get_init_state(cell, batch_size, first_input.dtype)
 
     inputs = first_input  # shape (N, d_i)
     state = init_state  # shape (N, d_s)
     top_k_logprob = None
     top_k_logits = None
     top_k_word_ids = None
-
-    batch_size = first_input.shape[0].value
-    if batch_size is None:
-        batch_size = tf.shape(first_input)[0]
     offset = tf.expand_dims(
         tf.range(0, batch_size) * beam_width,
         axis=1,

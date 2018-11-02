@@ -5,10 +5,7 @@ import tensorflow as tf
 RECURRENT_CELL_TYPE = Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]
 
 
-def _get_init_state(cell, inputs):
-    batch_size = inputs.shape.as_list()[0]
-    assert batch_size is not None
-    dtype = inputs.dtype
+def _get_init_state(cell, batch_size, dtype):
     if hasattr(cell, 'zero_state'):
         init_state = cell.zero_state(batch_size=batch_size, dtype=dtype)
     elif hasattr(cell, 'state_size'):
@@ -36,7 +33,10 @@ def dynamic_decode(
     ):
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
     if init_state is None:
-        init_state = _get_init_state(cell, first_input)
+        batch_size = first_input.shape[0].value
+        if batch_size is None:
+            batch_size = tf.shape(first_input)[0]
+        init_state = _get_init_state(cell, batch_size, first_input.dtype)
 
     inputs = first_input
     state = init_state

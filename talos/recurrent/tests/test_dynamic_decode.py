@@ -41,19 +41,20 @@ def test_dynamic_decode_logic(mocker):
 
 def test_dynamic_decode_tf():
     batch_size = 6
-    cell = tf.nn.rnn_cell.LSTMCell(num_units=5)
-    first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
-    init_state = (
-        tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),
-        tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),
-    )
-    next_input_producer = tf.keras.layers.Dense(units=3)
-    outputs = dynamic_decode(
-        cell=cell,
-        first_input=first_input,
-        maxlen=10,
-        output_layer=lambda x: x,
-        next_input_producer=next_input_producer,
-        init_state=init_state,
-    )
+    with tf.Graph().as_default():
+        cell = tf.nn.rnn_cell.LSTMCell(num_units=5)
+        first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
+        init_state = (
+            tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),
+            tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),
+        )
+        next_input_producer = tf.keras.layers.Dense(units=3)
+        outputs = dynamic_decode(
+            cell=cell,
+            first_input=first_input,
+            maxlen=10,
+            output_layer=lambda x: x,
+            next_input_producer=next_input_producer,
+            init_state=init_state,
+        )
     assert outputs.shape.as_list() == [batch_size, 10, 5]

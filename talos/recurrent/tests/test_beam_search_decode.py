@@ -41,7 +41,6 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
     with graph.as_default():
         batch_size = None
         first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
-        init_state = tf.placeholder(shape=[batch_size, 5], dtype=tf.float32)
         dense_layer = tf.keras.layers.Dense(units=3)
         output_tensors = beam_search_decode(
             cell=cell,
@@ -50,7 +49,7 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
             beam_width=3,
             output_layer=lambda x: x,
             next_input_producer=lambda logits, _: dense_layer(logits),
-            init_state=init_state,
+            # init_state=init_state,
         )
 
     with tf.Session(graph=graph) as sess:
@@ -59,10 +58,7 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
         )
         output_logits, output_word_ids = sess.run(
             output_tensors,
-            feed_dict={
-                first_input: np.zeros([2, 3], dtype=np.float32),
-                init_state: np.zeros([2, 5], dtype=np.float32),
-            }
+            feed_dict={first_input: np.zeros([2, 3], dtype=np.float32)}
         )
 
     assert output_logits.shape == (2, 10, 5)
