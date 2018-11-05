@@ -42,12 +42,15 @@ class Beam:
 
     _TIME_AXIS = 1
 
-    def __init__(self, batch_size, width, score_func=tf.nn.log_softmax):
+    def __init__(self, batch_size, width, score_func=tf.nn.log_softmax, end_token: int = 0):
         self.width = width
+        self.end_token = end_token
 
         self._history = None
-        self._score = None
+        self._sum_score = None
         self._flatten_ids = None
+        self._seqlen = tf.ones([batch_size, 1])
+        self._is_finished = None
         self._offset = tf.expand_dims(
             tf.range(batch_size) * width,
             axis=1,
@@ -74,7 +77,8 @@ class Beam:
 
     def explore_step(self, observation: tf.Tensor):
         n_choices = observation.shape[-1].value
-        self._score, expanded_ids = self._expand_beam(observation, n_choices)
+        top_k_ave_score, expanded_ids = self._expand_beam(observation, n_choices)
+        # expand_ids in range [0, kV)
         if self._n_steps > 0:
             beam_ids = expanded_ids // n_choices  # shape (N, k), in range [0, k)
             choice_ids = expanded_ids % n_choices  # shape (N, k) in range [0, V)
@@ -86,20 +90,33 @@ class Beam:
             choice_ids = expanded_ids
 
         self._n_steps += 1
-
-        choice_ids = tf.reshape(choice_ids, shape=[-1])
-        return choice_ids
+        choice_ids = tf.reshape(choice_ids, shape=[-1, 1])  # shape (Nk, 1)
+        if self._is_finished is not None:
+            self._is_finished = tf.logical_and(
+                self._is_finished,
+                tf.equal(choice_ids, self.end_token),
+            )
+        else:
+            self._is_finished = tf.equal(choice_ids, self.end_token)
+        self._seqlen = self.select(self._seqlen)
+        self._seqlen += tf.cast(self._is_finished, tf.float32)
+        self._sum_score = tf.reshape(top_k_ave_score, shape=[-1, 1]) * self._seqlen
+        return tf.squeeze(choice_ids, axis=1)
 
     def _expand_beam(self, observation, n_choices):
         new_score = self._score_func(observation)  # shape (Nk, V)
+        if self._is_finished is not None:
+            new_score *= tf.cast(self._is_finished, tf.float32)
         if self._n_steps > 0:
-            # for broadcast: (Nk, 1) + (Nk, V) -> (Nk, V)
-            expanded_score = tf.reshape(self._score, shape=[-1, 1]) + new_score
-            # expansion on last dimension (Nk, V) -> (N, kV)
-            expanded_score = tf.reshape(expanded_score, shape=[-1, self.width * n_choices])
+            # broadcast: (Nk, 1) + (Nk, V) -> (Nk, V)
+            expanded_score = self._sum_score + new_score
+            ave_score = expanded_score / self._seqlen
+            ave_score = tf.reshape(
+                ave_score, shape=[-1, self.width * n_choices]
+            )  # shape (N, kV)
         else:
-            expanded_score = new_score  # shape (N, V)
-        return tf.nn.top_k(expanded_score, k=self.width)
+            ave_score = new_score  # shape (N, V)
+        return tf.nn.top_k(ave_score, k=self.width)
 
     def select(self, params):
         if self._flatten_ids is not None:
