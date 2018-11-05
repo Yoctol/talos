@@ -31,6 +31,7 @@ def test_beam_search_decode(graph, cell, dense_layer):
             maxlen=10,
             beam_width=3,
             next_input_producer=lambda logits, _: dense_layer(logits),
+            end_token=0,
         )
     assert output_logits.shape.as_list() == [batch_size, 10, 5]
     assert output_word_ids.shape.as_list() == [batch_size, 10]
@@ -47,7 +48,7 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
             maxlen=10,
             beam_width=3,
             next_input_producer=lambda logits, _: dense_layer(logits),
-            # init_state=init_state,
+            end_token=0,
         )
 
     with tf.Session(graph=graph) as sess:

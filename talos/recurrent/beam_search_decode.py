@@ -11,6 +11,7 @@ def beam_search_decode(
         maxlen: int,
         beam_width: int,
         next_input_producer: Callable,
+        end_token: int,
         init_state: tf.Tensor = None,
     ):
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
@@ -22,7 +23,7 @@ def beam_search_decode(
 
     inputs = first_input  # shape (N, d_i)
     state = init_state  # shape (N, d_s)
-    beam = Beam(batch_size=batch_size, width=beam_width)
+    beam = Beam(batch_size=batch_size, width=beam_width, end_token=end_token)
 
     for _ in range(maxlen):
         output, state = cell(inputs, state)  # shape (Nk, d_o), (Nk, d_s)
@@ -42,7 +43,13 @@ class Beam:
 
     _TIME_AXIS = 1
 
-    def __init__(self, batch_size, width, score_func=tf.nn.log_softmax, end_token: int = 0):
+    def __init__(
+            self,
+            batch_size,
+            width,
+            end_token,
+            score_func=tf.nn.log_softmax,
+        ):
         self.width = width
         self.end_token = end_token
 
@@ -50,7 +57,7 @@ class Beam:
         self._sum_score = None
         self._flatten_ids = None
         self._seqlen = tf.ones([batch_size, 1])
-        self._is_finished = None
+        self._is_not_finished = None
         self._offset = tf.expand_dims(
             tf.range(batch_size) * width,
             axis=1,
@@ -91,22 +98,22 @@ class Beam:
 
         self._n_steps += 1
         choice_ids = tf.reshape(choice_ids, shape=[-1, 1])  # shape (Nk, 1)
-        if self._is_finished is not None:
-            self._is_finished = tf.logical_and(
-                self._is_finished,
-                tf.equal(choice_ids, self.end_token),
+        if self._is_not_finished is not None:
+            self._is_not_finished = tf.logical_and(
+                self._is_not_finished,
+                tf.not_equal(choice_ids, self.end_token),
             )
         else:
-            self._is_finished = tf.equal(choice_ids, self.end_token)
+            self._is_not_finished = tf.not_equal(choice_ids, self.end_token)
         self._seqlen = self.select(self._seqlen)
-        self._seqlen += tf.cast(self._is_finished, tf.float32)
+        self._seqlen += tf.cast(self._is_not_finished, tf.float32)
         self._sum_score = tf.reshape(top_k_ave_score, shape=[-1, 1]) * self._seqlen
         return tf.squeeze(choice_ids, axis=1)
 
     def _expand_beam(self, observation, n_choices):
         new_score = self._score_func(observation)  # shape (Nk, V)
-        if self._is_finished is not None:
-            new_score *= tf.cast(self._is_finished, tf.float32)
+        if self._is_not_finished is not None:
+            new_score *= tf.cast(self._is_not_finished, tf.float32)
         if self._n_steps > 0:
             # broadcast: (Nk, 1) + (Nk, V) -> (Nk, V)
             expanded_score = self._sum_score + new_score
