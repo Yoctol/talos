@@ -20,10 +20,10 @@ def add_spectral_norm(
         else:
             return name.endswith(_WEIGHTS_VARIABLE_NAME)
 
-    original_add_variable = layer.add_variable
+    original_add_weight = layer.add_weight
 
-    def new_add_variable(self, name, shape, **kwargs):
-        kernel = original_add_variable(name, shape, **kwargs)
+    def new_add_weight(self, name, shape, **kwargs):
+        kernel = original_add_weight(name, shape, **kwargs)
         if is_kernel_var(name):
             assert len(shape) >= 2, "Can't apply spectral norm on variable rank < 2!"
             if len(shape) > 2:
@@ -31,9 +31,9 @@ def add_spectral_norm(
             else:
                 kernel_matrix = kernel
 
-            u_vector = original_add_variable(
+            u_vector = original_add_weight(
                 name=f'{name}/singular_vector',
-                shape=(kernel_matrix.shape[0], 1),
+                shape=(kernel_matrix.shape[0].value, 1),
                 initializer=tf.truncated_normal_initializer(),
                 trainable=False,
                 dtype=kernel.dtype,
@@ -50,4 +50,4 @@ def add_spectral_norm(
 
         return kernel
 
-    layer.add_variable = types.MethodType(new_add_variable, layer)
+    layer.add_weight = types.MethodType(new_add_weight, layer)
