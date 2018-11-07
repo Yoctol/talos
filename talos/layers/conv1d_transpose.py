@@ -55,8 +55,7 @@ class Conv1DTranspose(Conv1D):
     def build(self, input_shape):
         input_shape = tensor_shape.TensorShape(input_shape)
         if len(input_shape) != 3:
-            raise ValueError('Inputs should have rank 3. Received input shape: ' +
-                             str(input_shape))
+            raise ValueError(f'Inputs should have rank 3. Received input shape: {input_shape}')
         if self.data_format == 'channels_first':
             channel_axis = 1
         else:
@@ -123,16 +122,19 @@ class Conv1DTranspose(Conv1D):
             output_shape_tensor,
             strides,
             padding=self.padding.upper(),
-            data_format=conv_utils.convert_data_format(self.data_format, ndim=3))
+            data_format=conv_utils.convert_data_format(self.data_format, ndim=3),
+        )
 
         if not context.executing_eagerly():
             # Infer the static output shape:
             out_shape = inputs.get_shape().as_list()
             out_shape[c_axis] = self.filters
-            out_shape[w_axis] = conv_utils.deconv_output_length(out_shape[w_axis],
-                                                                kernel_w,
-                                                                self.padding,
-                                                                stride_w)
+            out_shape[w_axis] = conv_utils.deconv_output_length(
+                out_shape[w_axis],
+                kernel_w,
+                self.padding,
+                stride_w,
+            )
             outputs.set_shape(out_shape)
 
         if self.use_bias:
