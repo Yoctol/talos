@@ -41,7 +41,7 @@ def test_chain_decode_logic(mocker):
 def test_chain_decode_tf():
     batch_size = 6
     with tf.Graph().as_default():
-        cell = tf.nn.rnn_cell.LSTMCell(num_units=5)
+        cell = tf.keras.layers.LSTMCell(units=5)
         first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
         init_state = (
             tf.placeholder(shape=[batch_size, 5], dtype=tf.float32),

@@ -1,8 +1,11 @@
-from typing import Callable, List
+from typing import Callable, List, Sequence, Tuple, Union
 
 import tensorflow as tf
 
 from .chain_decode import RECURRENT_CELL_TYPE, get_default_init_state
+
+
+NESTED_TYPE = Union[Sequence, tf.Tensor]
 
 
 def beam_search_decode(
@@ -13,7 +16,8 @@ def beam_search_decode(
         next_input_producer: Callable,
         end_token: int,
         init_state: tf.Tensor = None,
-    ):
+        output_width: int = 1,
+    ) -> Tuple[tf.Tensor, tf.Tensor]:
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
     batch_size = first_input.shape[0].value
     if batch_size is None:
@@ -26,42 +30,54 @@ def beam_search_decode(
     beam = Beam(batch_size=batch_size, width=beam_width, end_token=end_token)
 
     for _ in range(maxlen):
-        output, state = cell(inputs, state)  # shape (Nk, d_o), (Nk, d_s)
+        output, state = cell(inputs, state)  # shape (N, k, d_o), (N, k, d_s)
         choice_ids = beam.explore_step(observation=output)  # 更新 beam
         # NOTE 以下兩行一定要call，且順序不可改變。
-        output, state = beam.select([output, state])  # 幫我 tf.gather 這個東西
+        output, state = beam.select([output, state])  # 幫我 tf.batch_gather 這個東西
         beam.append([output, choice_ids])  # 加進 beam history 中
         # NOTE
-        inputs = next_input_producer(output, choice_ids)  # shape (N, d_i)
+        inputs = next_input_producer(output, choice_ids)  # shape (N, k, d_i)
 
-    output_tensor, output_choice_ids = beam.get_top()
+    output_tensor, output_choice_ids = beam.get_top(output_width=output_width)
 
     return output_tensor, output_choice_ids
 
 
+def _compute_length_penalty(func):
+    def wrapper(self, score):
+        if self._seqlen is not None:
+            length_penalty_coeff = self._length_penalty(self._seqlen)
+            ave_score, expanded_ids = func(self, score / length_penalty_coeff)
+            sum_score = ave_score * tf.squeeze(length_penalty_coeff, axis=2)
+            return sum_score, expanded_ids
+        return func(self, score)
+    return wrapper
+
+
 class Beam:
 
-    _TIME_AXIS = 1
+    _TIME_AXIS = 2
 
     def __init__(
             self,
-            batch_size,
-            width,
-            end_token,
-            score_func=tf.nn.log_softmax,
+            batch_size: Union[int, tf.Tensor],
+            width: int,
+            score_func: Callable = tf.nn.log_softmax,
+            end_token: int = None,
+            length_penalty: Callable = lambda x: x,
         ):
+        self.batch_size = batch_size
         self.width = width
         self.end_token = end_token
 
         self._history = None
         self._sum_score = None
-        self._flatten_ids = None
-        self._seqlen = tf.ones([batch_size, 1])
-        self._is_not_finished = None
-        self._offset = tf.expand_dims(
-            tf.range(batch_size) * width,
-            axis=1,
-        )  # shape (N, 1): 0, k, 2k....
+        self._beam_ids = None
+
+        self._length_penalty = length_penalty
+        self._not_finished = None
+        self._seqlen = None
+
         self._score_func = score_func
         self._n_steps = 0
 
@@ -83,68 +99,81 @@ class Beam:
             self._history = tensors
 
     def explore_step(self, observation: tf.Tensor):
-        n_choices = observation.shape[-1].value
-        top_k_ave_score, expanded_ids = self._expand_beam(observation, n_choices)
-        # expand_ids in range [0, kV)
-        if self._n_steps > 0:
-            beam_ids = expanded_ids // n_choices  # shape (N, k), in range [0, k)
+        self._sum_score, expanded_ids = self._select_new_beam(observation)
+        if observation.shape.ndims == 3:
+            # expand_ids in range [0, kV)
+            n_choices = observation.shape[-1].value
+            self._beam_ids = expanded_ids // n_choices  # shape (N, k), in range [0, k)
             choice_ids = expanded_ids % n_choices  # shape (N, k) in range [0, V)
-            self._flatten_ids = tf.reshape(
-                self._offset + beam_ids,  # shape (N, 1) + (N, k) -> (N, k)
-                shape=[-1],
-            )  # shape (Nk, ): k elements in [0, k), k elements in [k, 2k)...
         else:
-            choice_ids = expanded_ids
+            # expand_ids in range [0, V)
+            choice_ids = expanded_ids  # shape (N, k)
 
+        if self.end_token is not None:
+            self._seqlen, self._not_finished = self._new_seqlen_finished(choice_ids)
         self._n_steps += 1
-        choice_ids = tf.reshape(choice_ids, shape=[-1, 1])  # shape (Nk, 1)
-        if self._is_not_finished is not None:
-            self._is_not_finished = tf.logical_and(
-                self._is_not_finished,
-                tf.not_equal(choice_ids, self.end_token),
-            )
+        return choice_ids
+
+    def _select_new_beam(self, observation):
+        step_score = self._score_func(observation)  # shape (N, k, V)
+        if self._not_finished is not None:
+            step_score *= tf.cast(self._not_finished, step_score.dtype)
+        if self._sum_score is not None:
+            # broadcast: (N, k, 1) + (N, k, V) -> (N, k, V)
+            sum_score = tf.expand_dims(self._sum_score, axis=2) + step_score
         else:
-            self._is_not_finished = tf.not_equal(choice_ids, self.end_token)
-        self._seqlen = self.select(self._seqlen)
-        self._seqlen += tf.cast(self._is_not_finished, tf.float32)
-        self._sum_score = tf.reshape(top_k_ave_score, shape=[-1, 1]) * self._seqlen
-        return tf.squeeze(choice_ids, axis=1)
+            sum_score = step_score
+        return self._top_k_of_beam_and_choices(sum_score)
 
-    def _expand_beam(self, observation, n_choices):
-        new_score = self._score_func(observation)  # shape (Nk, V)
-        if self._is_not_finished is not None:
-            new_score *= tf.cast(self._is_not_finished, tf.float32)
-        if self._n_steps > 0:
-            # broadcast: (Nk, 1) + (Nk, V) -> (Nk, V)
-            expanded_score = self._sum_score + new_score
-            ave_score = expanded_score / self._seqlen
-            ave_score = tf.reshape(
-                ave_score, shape=[-1, self.width * n_choices]
-            )  # shape (N, kV)
+    @_compute_length_penalty
+    def _top_k_of_beam_and_choices(self, score):
+        if score.shape.ndims == 3:
+            score = tf.reshape(score, shape=[self.batch_size, -1])
+        return tf.nn.top_k(score, k=self.width)
+
+    def _new_seqlen_finished(self, choice_ids):
+        # every tensor have shape (N, k, 1)
+        step_not_finished = tf.not_equal(choice_ids, self.end_token)
+        step_not_finished = tf.expand_dims(step_not_finished, axis=2)
+        if self._not_finished is not None:
+            new_not_finished = tf.logical_and(self._not_finished, step_not_finished)
         else:
-            ave_score = new_score  # shape (N, V)
-        return tf.nn.top_k(ave_score, k=self.width)
+            new_not_finished = step_not_finished
 
-    def select(self, params):
-        if self._flatten_ids is not None:
-            return nested_call(tf.gather, params, indices=self._flatten_ids)
-        return nested_call(tile_batch, params, multiplier=self.width)
+        length_to_add = tf.cast(new_not_finished, tf.float32)
+        prev_seqlen = self.select(self._seqlen) if self._seqlen is not None else 1.
+        new_seqlen = length_to_add + prev_seqlen
+        return new_seqlen, new_not_finished
 
-    def get_top(self):
-        output_ids = tf.squeeze(self._offset, axis=-1)  # shape (N, )
-        return nested_call(tf.gather, self._history, indices=output_ids)
+    def select(self, params: NESTED_TYPE) -> NESTED_TYPE:
+        if self._beam_ids is not None:
+            return nested_call(tf.batch_gather, params, indices=self._beam_ids)
+        return nested_call(tile_beam, params, multiplier=self.width)
+
+    def get_top(self, output_width: int = 1):
+        beam_ids = tf.range(output_width)
+        output_ids = tf.tile(
+            tf.expand_dims(beam_ids, axis=0),
+            [self.batch_size, 1],
+        )  # shape (N, k)
+        return nested_call(tf.batch_gather, self._history, indices=output_ids)
 
 
-def nested_call(func, nested_var, *args, **kwargs):
+def nested_call(
+        func: Callable,
+        nested_var: NESTED_TYPE,
+        *args,
+        **kwargs
+    ) -> NESTED_TYPE:
     if hasattr(nested_var, '__len__'):
         return [nested_call(func, v, *args, **kwargs) for v in nested_var]
     return func(nested_var, *args, **kwargs)
 
 
-def tile_batch(tensor, multiplier):
+def tile_beam(tensor: tf.Tensor, multiplier: int) -> tf.Tensor:
     shape = tensor.shape
     rank = shape.ndims
     assert rank >= 1
     tensor = tf.expand_dims(tensor, axis=1)
     tensor = tf.tile(tensor, multiples=[1, multiplier] + [1] * (rank - 1))
-    return tf.reshape(tensor, shape=[-1] + shape.as_list()[1:])
+    return tensor
