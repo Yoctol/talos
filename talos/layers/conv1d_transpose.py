@@ -61,8 +61,9 @@ class Conv1DTranspose(Conv1D):
         else:
             channel_axis = -1
         if input_shape[channel_axis].value is None:
-            raise ValueError('The channel dimension of the inputs '
-                             'should be defined. Found `None`.')
+            raise ValueError(
+                'The channel dimension of the inputs should be defined. Found `None`.'
+            )
         input_dim = int(input_shape[channel_axis])
         self.input_spec = InputSpec(ndim=3, axes={channel_axis: input_dim})
         kernel_shape = self.kernel_size + (self.filters, input_dim)
@@ -99,8 +100,8 @@ class Conv1DTranspose(Conv1D):
             c_axis, w_axis = 2, 1
 
         width = inputs_shape[w_axis]
-        kernel_w, = self.kernel_size
-        stride_w, = self.strides
+        kernel_w = self.kernel_size[0]
+        stride_w = self.strides[0]
 
         # Infer the dynamic output shape:
         out_width = conv_utils.deconv_output_length(
@@ -156,8 +157,8 @@ class Conv1DTranspose(Conv1D):
         else:
             c_axis, w_axis = 2, 1
 
-        kernel_w, = self.kernel_size
-        stride_w = self.strides
+        kernel_w = self.kernel_size[0]
+        stride_w = self.strides[0]
 
         output_shape[c_axis] = self.filters
         output_shape[w_axis] = conv_utils.deconv_output_length(
