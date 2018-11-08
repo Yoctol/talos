@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "b2438acf89f832be6721128e77f475a8cd3b797adba39320150cf513ba917a5a"
+            "sha256": "ba97406e27d38ea6efe4cc5d9514a7a94a41c060c628ebffe12c26ae658ea301"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -256,8 +256,57 @@
                 "sha256:6a35f5b8761f45c5513e3405f110a86bea57982c3b75b766ce7b65217abe1670",
                 "sha256:c01f8a3963b3571a8e6bd7a4063359aff90749e160778e03817cd9b71c9e07d2"
             ],
-            "index": "pypi",
             "version": "==3.6.0"
+        },
+        "flake8-bugbear": {
+            "hashes": [
+                "sha256:7490f848130771d83caa63b54080cbb8c04ccd22d647b9daaf87e7bafc3ce9c9",
+                "sha256:f459d93951b187aee9e584c7fa24684a9b8485f46c53cfbce2b7be7313a6d733"
+            ],
+            "markers": "python_version >= '3.5'",
+            "version": "==17.4.0"
+        },
+        "flake8-builtins": {
+            "hashes": [
+                "sha256:112754f90b281829a4834c1f2052338142553efac455866028e136f9e333080f",
+                "sha256:a2a67165db017d2563225124b76d44ad7deb20488e205ceb504eb1c6f646555a"
+            ],
+            "version": "==1.0"
+        },
+        "flake8-class-newline": {
+            "hashes": [
+                "sha256:130a6991e8c58ec9a6380d273e449e61bcd974b446c97f1e16493f6350fa8d35",
+                "sha256:44e77747396c7586bbfe7814df9caf17d92000cb70a5ef9df5d721c934c6db33",
+                "sha256:514c4923c88eb8b3dd52db4b55b8d3483520db89db80af6ba812a4af15421ff1"
+            ],
+            "version": "==1.6.0"
+        },
+        "flake8-commas": {
+            "hashes": [
+                "sha256:8381cb25cd608323d01624d29b28e474342e7e53a2588610705c5316ef45a7a2",
+                "sha256:a3706b2386883e8ca2f9826713aedf955bcce70deddc385dae145881d42131c9"
+            ],
+            "version": "==0.4.3"
+        },
+        "flake8-config-yoctol": {
+            "hashes": [
+                "sha256:6d32d0ef4fd90192ddd620331486ea26dfc40286d29465979d74612a6516b918",
+                "sha256:f35f73c7bc87a13419ba6d7535388c58045b420ec6d6292d4ece7fd168414b6f"
+            ],
+            "index": "pypi",
+            "version": "==0.0.11"
+        },
+        "flake8-debugger": {
+            "hashes": [
+                "sha256:e5c8ac980d819db2f3fbb89fe0e43a2fe6c127edd6ce4984a3f7e0bbdac3d2d4"
+            ],
+            "version": "==3.0.0"
+        },
+        "flake8-print": {
+            "hashes": [
+                "sha256:255b01f0932f65fb8ce70a65f0f2abb4a05faf25f9fe53275cd13cacdc0179f5"
+            ],
+            "version": "==3.0.1"
         },
         "mccabe": {
             "hashes": [
