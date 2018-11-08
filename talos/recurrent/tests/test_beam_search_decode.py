@@ -13,7 +13,7 @@ def graph():
 
 @pytest.fixture(scope='function')
 def cell():
-    return tf.nn.rnn_cell.GRUCell(num_units=5)
+    return tf.keras.layers.GRUCell(units=5)
 
 
 @pytest.fixture(scope='function')
@@ -33,8 +33,8 @@ def test_beam_search_decode(graph, cell, dense_layer):
             next_input_producer=lambda logits, _: dense_layer(logits),
             end_token=0,
         )
-    assert output_logits.shape.as_list() == [batch_size, 10, 5]
-    assert output_word_ids.shape.as_list() == [batch_size, 10]
+    assert output_logits.shape.as_list() == [batch_size, 1, 10, 5]
+    assert output_word_ids.shape.as_list() == [batch_size, 1, 10]
 
 
 def test_beam_search_decode_dynamic(graph, cell, dense_layer):
@@ -60,5 +60,5 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
             feed_dict={first_input: np.zeros([2, 3], dtype=np.float32)}
         )
 
-    assert output_logits.shape == (2, 10, 5)
-    assert output_word_ids.shape == (2, 10)
+    assert output_logits.shape == (2, 1, 10, 5)
+    assert output_word_ids.shape == (2, 1, 10)

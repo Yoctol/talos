@@ -1,14 +1,20 @@
-from tensorflow.python.keras._impl.keras.engine import Layer
-from tensorflow.python.keras._impl.keras import activations
-from tensorflow.python.keras._impl.keras import backend as K
-from tensorflow.python.keras._impl.keras import constraints
-from tensorflow.python.keras._impl.keras import initializers
-from tensorflow.python.keras._impl.keras import regularizers
+from tensorflow.contrib.nn import conv1d_transpose
 
-from .tf_layers.conv1d_transpose import Conv1DTranspose as tfConv1DTranspose
+from tensorflow.python.eager import context
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.keras import activations
+from tensorflow.python.keras import constraints
+from tensorflow.python.keras import initializers
+from tensorflow.python.keras import regularizers
+from tensorflow.python.keras.engine.base_layer import InputSpec
+from tensorflow.python.keras.layers.convolutional import Conv1D
+from tensorflow.python.keras.utils import conv_utils
+
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import nn
 
 
-class Conv1DTranspose(tfConv1DTranspose, Layer):
+class Conv1DTranspose(Conv1D):
 
     def __init__(
             self,
@@ -28,8 +34,6 @@ class Conv1DTranspose(tfConv1DTranspose, Layer):
             bias_constraint=None,
             **kwargs
         ):
-        if data_format is None:
-            data_format = K.image_data_format()
         super().__init__(
             filters=filters,
             kernel_size=kernel_size,
@@ -45,25 +49,118 @@ class Conv1DTranspose(tfConv1DTranspose, Layer):
             activity_regularizer=regularizers.get(activity_regularizer),
             kernel_constraint=constraints.get(kernel_constraint),
             bias_constraint=constraints.get(bias_constraint),
-            **kwargs)
+            **kwargs
+        )
 
-    def get_config(self):
-        config = {
-            'filters': self.filters,
-            'kernel_size': self.kernel_size,
-            'strides': self.strides,
-            'padding': self.padding,
-            'data_format': self.data_format,
-            'activation': activations.serialize(self.activation),
-            'use_bias': self.use_bias,
-            'kernel_initializer': initializers.serialize(self.kernel_initializer),
-            'bias_initializer': initializers.serialize(self.bias_initializer),
-            'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
-            'bias_regularizer': regularizers.serialize(self.bias_regularizer),
-            'activity_regularizer':
-                regularizers.serialize(self.activity_regularizer),
-            'kernel_constraint': constraints.serialize(self.kernel_constraint),
-            'bias_constraint': constraints.serialize(self.bias_constraint)
-        }
-        base_config = super().get_config()
-        return {**base_config, **config}
+    def build(self, input_shape):
+        input_shape = tensor_shape.TensorShape(input_shape)
+        if len(input_shape) != 3:
+            raise ValueError(f'Inputs should have rank 3. Received input shape: {input_shape}')
+        if self.data_format == 'channels_first':
+            channel_axis = 1
+        else:
+            channel_axis = -1
+        if input_shape[channel_axis].value is None:
+            raise ValueError(
+                'The channel dimension of the inputs should be defined. Found `None`.'
+            )
+        input_dim = int(input_shape[channel_axis])
+        self.input_spec = InputSpec(ndim=3, axes={channel_axis: input_dim})
+        kernel_shape = self.kernel_size + (self.filters, input_dim)
+
+        self.kernel = self.add_weight(
+            name='kernel',
+            shape=kernel_shape,
+            initializer=self.kernel_initializer,
+            regularizer=self.kernel_regularizer,
+            constraint=self.kernel_constraint,
+            trainable=True,
+            dtype=self.dtype,
+        )
+        if self.use_bias:
+            self.bias = self.add_weight(
+                name='bias',
+                shape=(self.filters,),
+                initializer=self.bias_initializer,
+                regularizer=self.bias_regularizer,
+                constraint=self.bias_constraint,
+                trainable=True,
+                dtype=self.dtype,
+            )
+        else:
+            self.bias = None
+        self.built = True
+
+    def call(self, inputs):
+        inputs_shape = array_ops.shape(inputs)
+        batch_size = inputs_shape[0]
+        if self.data_format == 'channels_first':
+            c_axis, w_axis = 1, 2
+        else:
+            c_axis, w_axis = 2, 1
+
+        width = inputs_shape[w_axis]
+        kernel_w = self.kernel_size[0]
+        stride_w = self.strides[0]
+
+        # Infer the dynamic output shape:
+        out_width = conv_utils.deconv_output_length(
+            width,
+            kernel_w,
+            self.padding,
+            stride_w,
+        )
+        if self.data_format == 'channels_first':
+            output_shape = (batch_size, self.filters, out_width)
+        else:
+            output_shape = (batch_size, out_width, self.filters)
+        strides = stride_w
+
+        output_shape_tensor = array_ops.stack(output_shape)
+        outputs = conv1d_transpose(
+            inputs,
+            self.kernel,
+            output_shape_tensor,
+            strides,
+            padding=self.padding.upper(),
+            data_format=conv_utils.convert_data_format(self.data_format, ndim=3),
+        )
+
+        if not context.executing_eagerly():
+            # Infer the static output shape:
+            out_shape = inputs.get_shape().as_list()
+            out_shape[c_axis] = self.filters
+            out_shape[w_axis] = conv_utils.deconv_output_length(
+                out_shape[w_axis],
+                kernel_w,
+                self.padding,
+                stride_w,
+            )
+            outputs.set_shape(out_shape)
+
+        if self.use_bias:
+            outputs = nn.bias_add(
+                outputs,
+                self.bias,
+                data_format=conv_utils.convert_data_format(self.data_format, ndim=4),
+            )
+
+        if self.activation is not None:
+            return self.activation(outputs)
+        return outputs
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tensor_shape.TensorShape(input_shape).as_list()
+        output_shape = list(input_shape)
+        if self.data_format == 'channels_first':
+            c_axis, w_axis = 1, 2
+        else:
+            c_axis, w_axis = 2, 1
+
+        kernel_w = self.kernel_size[0]
+        stride_w = self.strides[0]
+
+        output_shape[c_axis] = self.filters
+        output_shape[w_axis] = conv_utils.deconv_output_length(
+            output_shape[w_axis], kernel_w, self.padding, stride_w)
+        return tensor_shape.TensorShape(output_shape)

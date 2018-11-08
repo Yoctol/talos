@@ -12,17 +12,16 @@ def graph():
 
 def test_spectral_norm_dense(graph):
     with graph.as_default():
-        dense_layer = tf.layers.Dense(10)
+        dense_layer = tf.keras.layers.Dense(10)
         add_spectral_norm(dense_layer)
 
         inputs = tf.placeholder(dtype=tf.float32, shape=[None, 20])
         dense_layer(inputs)
 
     assert len(dense_layer.updates) == 1
-    assert dense_layer.updates[0].name == "dense/kernel/power_iter:0"
+    assert dense_layer.updates[0].name == "dense/kernel/power_iter"
     assert dense_layer.kernel.name == "dense/kernel_sn:0"
     assert len(dense_layer.trainable_variables) == 2
-    assert len(graph.get_collection(tf.GraphKeys.UPDATE_OPS)) == 1
 
 
 def test_spectral_norm_gru(graph):
