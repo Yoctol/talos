@@ -30,13 +30,13 @@ class Module(abc.ABC):
     @property
     def trainable_variables(self):
         return list(chain.from_iterable(
-            layer.trainable_variables for layer in self.sub_layers)
+            layer.trainable_variables for layer in self.sub_layers),
         )
 
     @property
     def updates(self):
         return list(chain.from_iterable(
-            layer.updates for layer in self.sub_layers)
+            layer.updates for layer in self.sub_layers),
         )
 
 

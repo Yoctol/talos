@@ -49,7 +49,7 @@ class Conv1DTranspose(Conv1D):
             activity_regularizer=regularizers.get(activity_regularizer),
             kernel_constraint=constraints.get(kernel_constraint),
             bias_constraint=constraints.get(bias_constraint),
-            **kwargs
+            **kwargs,
         )
 
     def build(self, input_shape):
@@ -62,7 +62,7 @@ class Conv1DTranspose(Conv1D):
             channel_axis = -1
         if input_shape[channel_axis].value is None:
             raise ValueError(
-                'The channel dimension of the inputs should be defined. Found `None`.'
+                'The channel dimension of the inputs should be defined. Found `None`.',
             )
         input_dim = int(input_shape[channel_axis])
         self.input_spec = InputSpec(ndim=3, axes={channel_axis: input_dim})
