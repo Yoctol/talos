@@ -53,11 +53,11 @@ def test_beam_search_decode_dynamic(graph, cell, dense_layer):
 
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
         )
         output_logits, output_word_ids = sess.run(
             output_tensors,
-            feed_dict={first_input: np.zeros([2, 3], dtype=np.float32)}
+            feed_dict={first_input: np.zeros([2, 3], dtype=np.float32)},
         )
 
     assert output_logits.shape == (2, 1, 10, 5)
