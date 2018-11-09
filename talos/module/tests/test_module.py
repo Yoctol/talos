@@ -12,34 +12,36 @@ def graph():
         yield graph
 
 
-def test_logic(mocker):
+def test_logic_by_mock(mocker):
     mock_layer = mocker.Mock(
         side_effect=lambda x: x + 1,
         trainable_variables=[1, 2, 3],
         updates=['a', 'b'],
     )
-    seq = Sequential([mock_layer for _ in range(5)])
-    assert seq(2) == 7  # 2 + 1 * 5
+    n_layers = 5
+    seq = Sequential([mock_layer for _ in range(n_layers)])
+    assert seq(2) == 2 + n_layers * 1
 
-    assert mock_layer.call_count == 5
-    assert len(seq.trainable_variables) == 15
-    assert len(seq.updates) == 10
+    assert mock_layer.call_count == n_layers
+    assert len(seq.trainable_variables) == 3 * n_layers
+    assert len(seq.updates) == 2 * n_layers
 
 
 def test_layer_build(graph):
-    dense_layer1 = tf.keras.layers.Dense(10)
-    dense_layer2 = tf.keras.layers.Dense(5)
+    batch_size, input_dim = None, 4
+    dense1 = tf.keras.layers.Dense(10)
+    dense2 = tf.keras.layers.Dense(5)
     bn_layer = tf.keras.layers.BatchNormalization()
-    seq = Sequential([dense_layer1, dense_layer2, bn_layer], scope="test")
+    seq = Sequential([dense1, dense2, bn_layer], scope="test")
 
-    inputs = tf.constant([[1.], [2.]])
+    inputs = tf.placeholder(dtype=tf.float32, shape=[batch_size, input_dim])
     outputs = seq(inputs)
 
-    assert outputs.shape.as_list() == [2, 5]
-    assert dense_layer1.kernel.shape.as_list() == [1, 10]
-    assert dense_layer2.kernel.shape.as_list() == [10, 5]
-    assert dense_layer1.kernel.name == "test/dense/kernel:0"
-    assert dense_layer2.kernel.name == "test/dense_1/kernel:0"
+    assert outputs.shape.as_list() == [batch_size, dense2.units]
+    assert dense1.kernel.shape.as_list() == [input_dim, dense1.units]
+    assert dense2.kernel.shape.as_list() == [dense1.units, dense2.units]
+    assert dense1.kernel.name == "test/dense/kernel:0"
+    assert dense2.kernel.name == "test/dense_1/kernel:0"
     assert len(seq.trainable_variables) == 6  # dense weight/bias + bn gamma/beta
     assert len(seq.non_trainable_variables) == 2  # sliding average mean, variance
     assert len(seq.variables) == 6 + 2
@@ -47,9 +49,9 @@ def test_layer_build(graph):
 
 
 def test_reuse(graph):
-    dense_layer1 = tf.keras.layers.Dense(10)
-    dense_layer2 = tf.keras.layers.Dense(5)
-    seq = Sequential([dense_layer1, dense_layer2])
+    dense1 = tf.keras.layers.Dense(10)
+    dense2 = tf.keras.layers.Dense(5)
+    seq = Sequential([dense1, dense2])
 
     rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 5])
     rank3_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5])
