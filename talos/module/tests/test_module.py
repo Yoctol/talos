@@ -67,7 +67,7 @@ def test_reuse(graph):
 
 
 def test_gradients(graph):
-    seq = Sequential([tf.keras.layers.Dense(i) for i in range(3, 10)])
+    seq = Sequential([tf.keras.layers.Dense(units) for units in range(3, 10)])
     inputs = tf.random_normal(shape=[5, 3])
     outputs = seq(inputs)
     gradients = tf.gradients(outputs, inputs)
@@ -80,3 +80,17 @@ def test_gradients(graph):
         gradients_norm_val = sess.run(gradients_norm)
 
     assert gradients_norm_val > 0.
+
+
+def test_nested_sequential(graph):
+    seq = Sequential(sub_layers=[
+        Sequential(sub_layers=[tf.keras.layers.Dense(units) for _ in range(3)], scope=f'B{i}')
+        for i, units in enumerate([1, 2, 3], 1)
+    ], scope='A')
+    inputs = tf.random_normal(shape=[5, 3])
+    seq(inputs)
+
+    assert len(seq.variables) == 18  # 9 dense layers
+    assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B1')) == 6
+    assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B2')) == 6
+    assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B3')) == 6
