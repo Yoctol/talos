@@ -32,7 +32,7 @@ def test_layer_build(graph):
     dense1 = tf.keras.layers.Dense(10)
     dense2 = tf.keras.layers.Dense(5)
     bn_layer = tf.keras.layers.BatchNormalization()
-    seq = Sequential([dense1, dense2, bn_layer], scope="test")
+    seq = Sequential([dense1, dense2, bn_layer], scope="scope")
 
     inputs = tf.placeholder(dtype=tf.float32, shape=[batch_size, input_dim])
     outputs = seq(inputs)
@@ -40,12 +40,12 @@ def test_layer_build(graph):
     assert outputs.shape.as_list() == [batch_size, dense2.units]
     assert dense1.kernel.shape.as_list() == [input_dim, dense1.units]
     assert dense2.kernel.shape.as_list() == [dense1.units, dense2.units]
-    assert dense1.kernel.name == "test/dense/kernel:0"
-    assert dense2.kernel.name == "test/dense_1/kernel:0"
-    assert len(seq.trainable_variables) == 6  # dense weight/bias + bn gamma/beta
-    assert len(seq.non_trainable_variables) == 2  # sliding average mean, variance
+    assert dense1.kernel.name == "scope/dense/kernel:0"  # test scope works
+    assert dense2.kernel.name == "scope/dense_1/kernel:0"
+    assert len(seq.trainable_variables) == 6  # 2 dense layers' kernel/bias + bn gamma/beta
+    assert len(seq.non_trainable_variables) == 2  # sliding average mean, variance of bn
     assert len(seq.variables) == 6 + 2
-    assert len(seq.updates) == 2  # sliding average mean, variance
+    assert len(seq.updates) == 2  # sliding average mean, variance update ops of bn
 
 
 def test_reuse(graph):
@@ -57,7 +57,7 @@ def test_reuse(graph):
     rank3_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5])
     rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 2, 5])
     invalid_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 2])
-    seq(rank2_inputs)
+    seq(rank2_inputs)  # built when first call, will check input_dim = 5 at future call
     try:
         seq(rank3_inputs)
         seq(rank4_inputs)
@@ -65,10 +65,10 @@ def test_reuse(graph):
         pytest.fail("Sequential can't reuse!")
 
     with pytest.raises(ValueError):
-        seq(invalid_inputs)
+        seq(invalid_inputs)  # due to last dimension incompatible: 2 != 5
 
 
-def test_gradients(graph):
+def test_backprop(graph):
     seq = Sequential([tf.keras.layers.Dense(units) for units in range(3, 10)])
     inputs = tf.random_normal(shape=[5, 3])
     outputs = seq(inputs)
@@ -81,7 +81,7 @@ def test_gradients(graph):
         )
         gradients_norm_val = sess.run(gradients_norm)
 
-    assert gradients_norm_val > 0.
+    assert gradients_norm_val > 0.  # gradient can flow to input side.
 
 
 def test_nested_sequential(graph):
@@ -92,7 +92,7 @@ def test_nested_sequential(graph):
     inputs = tf.random_normal(shape=[5, 3])
     seq(inputs)
 
-    assert len(seq.variables) == 18  # 9 dense layers
+    assert len(seq.variables) == 18  # 9 dense layers' kernel/bias
     assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B1')) == 6
     assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B2')) == 6
     assert len(graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='A/B3')) == 6
