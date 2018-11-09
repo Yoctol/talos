@@ -6,18 +6,19 @@ import tensorflow as tf
 from ..conv1d_transpose import Conv1DTranspose
 
 
-@pytest.fixture(scope='function')
+@pytest.yield_fixture(scope='function')
 def graph():
-    return tf.Graph()
+    graph = tf.Graph()
+    with graph.as_default():
+        yield graph
 
 
 def test_output_shape_valid_padding(graph):
     width, channel = 10, 4
     filters, kernel_size = 3, 5
-    with graph.as_default():
-        dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='valid')
-        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-        outputs = dconv1d(inputs)
+    dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='valid')
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+    outputs = dconv1d(inputs)
 
     assert outputs.shape.as_list() == [None, width + kernel_size - 1, filters]
     config = dconv1d.get_config()
@@ -28,10 +29,9 @@ def test_output_shape_valid_padding(graph):
 def test_output_shape_same_padding(graph):
     width, channel = 10, 4
     filters, kernel_size = 3, 5
-    with graph.as_default():
-        dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='same')
-        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-        outputs = dconv1d(inputs)
+    dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='same')
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+    outputs = dconv1d(inputs)
 
     assert outputs.shape.as_list() == [None, width, filters]
     config = dconv1d.get_config()
@@ -41,15 +41,14 @@ def test_output_shape_same_padding(graph):
 
 def test_output_value_valid_padding(graph):
     width, channel = 3, 1
-    with graph.as_default():
-        dconv1d = Conv1DTranspose(
-            filters=1,
-            kernel_size=3,
-            kernel_initializer='ones',
-            padding='valid',
-        )
-        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-        outputs = dconv1d(inputs)
+    dconv1d = Conv1DTranspose(
+        filters=1,
+        kernel_size=3,
+        kernel_initializer='ones',
+        padding='valid',
+    )
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+    outputs = dconv1d(inputs)
 
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
@@ -73,15 +72,14 @@ def test_output_value_valid_padding(graph):
 
 def test_output_value_same_padding(graph):
     width, channel = 3, 1
-    with graph.as_default():
-        dconv1d = Conv1DTranspose(
-            filters=1,
-            kernel_size=3,
-            kernel_initializer='ones',
-            padding='same',
-        )
-        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-        outputs = dconv1d(inputs)
+    dconv1d = Conv1DTranspose(
+        filters=1,
+        kernel_size=3,
+        kernel_initializer='ones',
+        padding='same',
+    )
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+    outputs = dconv1d(inputs)
 
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
@@ -104,17 +102,15 @@ def test_output_value_same_padding(graph):
 
 
 def test_invalid_input_rank(graph):
-    with graph.as_default():
-        rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5, 1])
-        with pytest.raises(ValueError):
-            Conv1DTranspose(filters=10, kernel_size=5)(rank4_inputs)
+    rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5, 1])
+    with pytest.raises(ValueError):
+        Conv1DTranspose(filters=10, kernel_size=5)(rank4_inputs)
 
 
 def test_invalid_input_shape(graph):
-    with graph.as_default():
-        inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5])
-        different_shape_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 6])
-        dconv1d = Conv1DTranspose(filters=10, kernel_size=5)
-        dconv1d(inputs)
-        with pytest.raises(ValueError):
-            dconv1d(different_shape_inputs)
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5])
+    different_shape_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 6])
+    dconv1d = Conv1DTranspose(filters=10, kernel_size=5)
+    dconv1d(inputs)
+    with pytest.raises(ValueError):
+        dconv1d(different_shape_inputs)
