@@ -6,12 +6,41 @@ About this project...
 
 ## Installation
 
-Installation instructions...
+``` shell
+git clone https://github.com/Yoctol/talos.git
+```
+
+``` shell
+pipenv install
+```
 
 ## Usage
 
-Usage instructions...
+```python=
+pre_activate_bn_block = lambda: Sequential([
+    Dense(
+        units=10,
+        kernel_initialzer='lecun_normal',
+        activation=None,
+    ),
+    BatchNormalization(),
+    Activation('relu'),
+])
+model = Sequential([
+    pre_activate_bn_block(),
+    pre_activate_bn_block(),
+    pre_activate_bn_block(),
+])
+
+outputs = model(inputs)
+```
 
 ## Test
 
-Testing instructions...
+``` shell
+pipenv install --dev
+```
+
+``` shell
+pytest
+```
