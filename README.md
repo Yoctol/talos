@@ -7,11 +7,11 @@ About this project...
 ## Installation
 
 ``` shell
-git clone https://github.com/Yoctol/talos.git
+$ git clone https://github.com/Yoctol/talos.git
 ```
 
-``` shell
-pipenv install
+``` bash
+$ pipenv install
 ```
 
 ## Usage
@@ -28,6 +28,7 @@ def pre_activate_bn_dense(units):
         BatchNormalization(),
         Activation('relu'),
     ])
+
 model = Sequential([
     pre_activate_bn_dense(32),
     pre_activate_bn_dense(16),
@@ -46,9 +47,9 @@ with tf.control_dependencies(model.updates):
 ## Test
 
 ``` shell
-pipenv install --dev
+$ pipenv install --dev
 ```
 
 ``` shell
-pytest
+$ pytest
 ```
