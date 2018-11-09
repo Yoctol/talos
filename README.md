@@ -16,7 +16,7 @@ pipenv install
 
 ## Usage
 
-```python=
+```python
 pre_activate_bn_block = lambda: Sequential([
     Dense(
         units=10,
