@@ -29,8 +29,9 @@ def test_logic(mocker):
 def test_layer_build(graph):
     dense_layer1 = tf.keras.layers.Dense(10)
     dense_layer2 = tf.keras.layers.Dense(5)
+    bn_layer = tf.keras.layers.BatchNormalization()
+    seq = Sequential([dense_layer1, dense_layer2, bn_layer], scope="test")
 
-    seq = Sequential([dense_layer1, dense_layer2], scope="test")
     inputs = tf.constant([[1.], [2.]])
     outputs = seq(inputs)
 
@@ -39,16 +40,17 @@ def test_layer_build(graph):
     assert dense_layer2.kernel.shape.as_list() == [10, 5]
     assert dense_layer1.kernel.name == "test/dense/kernel:0"
     assert dense_layer2.kernel.name == "test/dense_1/kernel:0"
-    assert len(seq.variables) == 4
-    assert len(seq.trainable_variables) == 4
-    assert len(seq.non_trainable_variables) == 0
+    assert len(seq.trainable_variables) == 6  # dense weight/bias + bn gamma/beta
+    assert len(seq.non_trainable_variables) == 2  # sliding average mean, variance
+    assert len(seq.variables) == 6 + 2
+    assert len(seq.updates) == 2  # sliding average mean, variance
 
 
 def test_reuse(graph):
     dense_layer1 = tf.keras.layers.Dense(10)
     dense_layer2 = tf.keras.layers.Dense(5)
-
     seq = Sequential([dense_layer1, dense_layer2])
+
     rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 5])
     rank3_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5])
     rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 2, 5])
@@ -62,3 +64,19 @@ def test_reuse(graph):
 
     with pytest.raises(ValueError):
         seq(invalid_inputs)
+
+
+def test_gradients(graph):
+    seq = Sequential([tf.keras.layers.Dense(i) for i in range(3, 10)])
+    inputs = tf.random_normal(shape=[5, 3])
+    outputs = seq(inputs)
+    gradients = tf.gradients(outputs, inputs)
+    gradients_norm = tf.norm(gradients)
+
+    with tf.Session(graph=graph) as sess:
+        sess.run(tf.variables_initializer(
+            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
+        )
+        gradients_norm_val = sess.run(gradients_norm)
+
+    assert gradients_norm_val > 0.
