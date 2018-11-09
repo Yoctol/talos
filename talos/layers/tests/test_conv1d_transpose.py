@@ -11,11 +11,11 @@ def graph():
     return tf.Graph()
 
 
-def test_output_shape(graph):
+def test_output_shape_valid_padding(graph):
     width, channel = 10, 4
     filters, kernel_size = 3, 5
     with graph.as_default():
-        dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size)
+        dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='valid')
         inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
         outputs = dconv1d(inputs)
 
@@ -25,13 +25,28 @@ def test_output_shape(graph):
     assert config['kernel_size'] == (kernel_size, )
 
 
-def test_output_value(graph):
+def test_output_shape_same_padding(graph):
+    width, channel = 10, 4
+    filters, kernel_size = 3, 5
+    with graph.as_default():
+        dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='same')
+        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+        outputs = dconv1d(inputs)
+
+    assert outputs.shape.as_list() == [None, width, filters]
+    config = dconv1d.get_config()
+    assert config['filters'] == filters
+    assert config['kernel_size'] == (kernel_size, )
+
+
+def test_output_value_valid_padding(graph):
     width, channel = 3, 1
     with graph.as_default():
         dconv1d = Conv1DTranspose(
             filters=1,
             kernel_size=3,
             kernel_initializer='ones',
+            padding='valid',
         )
         inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
         outputs = dconv1d(inputs)
@@ -49,6 +64,38 @@ def test_output_value(graph):
         np.array([[[1.], [1.], [1.], [0.], [0.]]]),
         np.array([[[0.], [2.], [2.], [2.], [0.]]]),
         np.array([[[0.], [0.], [3.], [3.], [3.]]]),
+    ], axis=0)
+    np.testing.assert_array_almost_equal(
+        outputs_val,
+        expected_outputs_val,
+    )
+
+
+def test_output_value_same_padding(graph):
+    width, channel = 3, 1
+    with graph.as_default():
+        dconv1d = Conv1DTranspose(
+            filters=1,
+            kernel_size=3,
+            kernel_initializer='ones',
+            padding='same',
+        )
+        inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+        outputs = dconv1d(inputs)
+
+    with tf.Session(graph=graph) as sess:
+        sess.run(tf.variables_initializer(
+            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
+        )
+        outputs_val = sess.run(
+            outputs,
+            feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+        )
+
+    expected_outputs_val = np.sum([
+        np.array([[[1.], [1.], [0.]]]),
+        np.array([[[2.], [2.], [2.]]]),
+        np.array([[[0.], [3.], [3.]]]),
     ], axis=0)
     np.testing.assert_array_almost_equal(
         outputs_val,
