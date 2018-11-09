@@ -28,9 +28,21 @@ class Module(abc.ABC):
         pass
 
     @property
+    def variables(self):
+        return list(chain.from_iterable(
+            layer.variables for layer in self.sub_layers),
+        )
+
+    @property
     def trainable_variables(self):
         return list(chain.from_iterable(
             layer.trainable_variables for layer in self.sub_layers),
+        )
+
+    @property
+    def non_trainable_variables(self):
+        return list(chain.from_iterable(
+            layer.non_trainable_variables for layer in self.sub_layers),
         )
 
     @property
