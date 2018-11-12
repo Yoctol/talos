@@ -19,6 +19,8 @@ class GlobalAttentionPooling1D(Module):
             raise ValueError("reg_coeff can't be negative!")
         self.reg_coeff = reg_coeff
         self._identity_matrix = None
+        self.units = units
+        self.heads = heads
 
         self.candidate_layer = tf.keras.layers.Dense(
             units=units,

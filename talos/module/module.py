@@ -46,6 +46,12 @@ class Module(abc.ABC):
         )
 
     @property
+    def losses(self):
+        return list(chain.from_iterable(
+            layer.losses for layer in self.sub_layers),
+        )
+
+    @property
     def updates(self):
         return list(chain.from_iterable(
             layer.updates for layer in self.sub_layers),
