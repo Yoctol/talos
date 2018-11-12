@@ -8,12 +8,18 @@ class GlobalAttentionPooling1D(Module):
     """
     def __init__(
             self,
-            units,
-            heads=1,
-            activation='tanh',
-            use_bias=False,
+            units: int,
+            heads: int = 1,
+            activation: str = 'tanh',
+            use_bias: bool = False,
+            reg_coeff: float = 0.,
             **kwargs,
         ):
+        if reg_coeff < 0:
+            raise ValueError("reg_coeff can't be negative!")
+        self.reg_coeff = reg_coeff
+        self._identity_matrix = None
+
         self.candidate_layer = tf.keras.layers.Dense(
             units=units,
             activation=activation,
@@ -24,9 +30,9 @@ class GlobalAttentionPooling1D(Module):
             units=heads,
             activation=lambda logits: tf.nn.softmax(logits, axis=1),
             use_bias=False,
-            name='presoftmax_layer',
+            name='softmax_layer',
         )
-        super().__init__(sub_layers=[self.candidate_layer, self.presoftmax_layer], **kwargs)
+        super().__init__(sub_layers=[self.candidate_layer, self.softmax_layer], **kwargs)
 
     def call(
             self,
@@ -47,6 +53,18 @@ class GlobalAttentionPooling1D(Module):
             weights *= tf.expand_dims(mask, axis=2)
             weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
 
+        if self.reg_coeff > 0:
+            weights_product = tf.matmul(weights, weights, transpose_a=True)
+            identity_matrix = self._get_identity_matrix()
+            penalty = self.reg_coeff * tf.reduce_sum(tf.square(
+                weights_product - identity_matrix,
+            ))
+            self.softmax_layer.add_loss(penalty)
         # shape (N, Head, input_dim)
         outputs = tf.matmul(weights, inputs, transpose_a=True)
         return outputs
+
+    def _get_identity_matrix(self):
+        if self._identity_matrix is None:
+            self._identity_matrix = tf.eye(self.heads, batch_shape=[1])
+        return self._identity_matrix
