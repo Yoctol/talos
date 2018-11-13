@@ -42,7 +42,6 @@ def test_beam_search_decode(graph, cell, dense_layer):
 def test_beam_search_decode_dynamic_batch(graph, cell, dense_layer):
     batch_size, maxlen, beam_width, output_width = None, 5, 3, 2
     first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
-    dense_layer = tf.keras.layers.Dense(units=3)
     output_tensors = beam_search_decode(
         cell=cell,
         first_input=first_input,
