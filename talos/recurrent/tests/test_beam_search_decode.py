@@ -24,41 +24,44 @@ def dense_layer():
 
 
 def test_beam_search_decode(graph, cell, dense_layer):
-    batch_size, maxlen = 7, 5
+    batch_size, maxlen, beam_width, output_width = 7, 5, 3, 2
     first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
     output_logits, output_word_ids = beam_search_decode(
         cell=cell,
         first_input=first_input,
         maxlen=maxlen,
-        beam_width=3,
+        beam_width=beam_width,
         next_input_producer=lambda logits, _: dense_layer(logits),
         end_token=0,
+        output_width=output_width,
     )
-    assert output_logits.shape.as_list() == [batch_size, 1, maxlen, cell.units]
-    assert output_word_ids.shape.as_list() == [batch_size, 1, maxlen]
+    assert output_logits.shape.as_list() == [batch_size, output_width, maxlen, cell.units]
+    assert output_word_ids.shape.as_list() == [batch_size, output_width, maxlen]
 
 
-def test_beam_search_decode_dynamic(graph, cell, dense_layer):
-    batch_size, maxlen = None, 5
+def test_beam_search_decode_dynamic_batch(graph, cell, dense_layer):
+    batch_size, maxlen, beam_width, output_width = None, 5, 3, 2
     first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
     dense_layer = tf.keras.layers.Dense(units=3)
     output_tensors = beam_search_decode(
         cell=cell,
         first_input=first_input,
         maxlen=maxlen,
-        beam_width=3,
+        beam_width=beam_width,
         next_input_producer=lambda logits, _: dense_layer(logits),
         end_token=0,
+        output_width=output_width,
     )
 
+    first_input_val = np.zeros([2, 3], dtype=np.float32)
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
             var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
         )
         output_logits, output_word_ids = sess.run(
             output_tensors,
-            feed_dict={first_input: np.zeros([2, 3], dtype=np.float32)},
+            feed_dict={first_input: first_input_val},
         )
 
-    assert output_logits.shape == (2, 1, maxlen, cell.units)
-    assert output_word_ids.shape == (2, 1, maxlen)
+    assert output_logits.shape == (len(first_input_val), output_width, maxlen, cell.units)
+    assert output_word_ids.shape == (len(first_input_val), output_width, maxlen)

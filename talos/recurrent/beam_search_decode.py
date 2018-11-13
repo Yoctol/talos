@@ -151,12 +151,8 @@ class Beam:
         return nested_call(tile_beam, params, multiplier=self.width)
 
     def get_top(self, output_width: int = 1):
-        beam_ids = tf.range(output_width)
-        output_ids = tf.tile(
-            tf.expand_dims(beam_ids, axis=0),
-            [self.batch_size, 1],
-        )  # shape (N, k)
-        return nested_call(tf.batch_gather, self._history, indices=output_ids)
+        assert 0 < output_width <= self.width
+        return [tensor[:, 0: output_width] for tensor in self._history]
 
 
 def nested_call(
