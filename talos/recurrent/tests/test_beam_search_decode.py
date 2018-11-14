@@ -25,7 +25,7 @@ def dense_layer():
 
 def test_beam_search_decode(graph, cell, dense_layer):
     batch_size, maxlen, beam_width, output_width = 7, 5, 3, 2
-    first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
+    first_input = tf.placeholder(shape=[batch_size, dense_layer.units], dtype=tf.float32)
     output_logits, output_word_ids = beam_search_decode(
         cell=cell,
         first_input=first_input,
@@ -41,7 +41,7 @@ def test_beam_search_decode(graph, cell, dense_layer):
 
 def test_beam_search_decode_dynamic_batch(graph, cell, dense_layer):
     batch_size, maxlen, beam_width, output_width = None, 5, 3, 2
-    first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
+    first_input = tf.placeholder(shape=[batch_size, dense_layer.units], dtype=tf.float32)
     output_tensors = beam_search_decode(
         cell=cell,
         first_input=first_input,
@@ -52,7 +52,7 @@ def test_beam_search_decode_dynamic_batch(graph, cell, dense_layer):
         output_width=output_width,
     )
 
-    first_input_val = np.zeros([2, 3], dtype=np.float32)
+    first_input_val = np.zeros([2] + first_input.shape.as_list()[1:], dtype=np.float32)
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
             var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
