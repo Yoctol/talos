@@ -67,3 +67,8 @@ class GlobalAttentionPooling1D(tf.keras.Model):
         if self._identity_matrix is None:
             self._identity_matrix = tf.eye(self.heads, batch_shape=[1])
         return self._identity_matrix
+
+    def compute_output_shape(self, input_shape):
+        output_shape = input_shape.as_list()
+        output_shape[1] = self.heads
+        return tf.TensorShape(output_shape)

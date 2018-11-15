@@ -21,6 +21,7 @@ def test_global_attention_pooling_1d(graph):
     outputs = att_pool(inputs)
 
     assert outputs.shape.as_list() == [None, heads, channel]
+    assert att_pool.compute_output_shape(inputs.shape).as_list() == [None, heads, channel]
     assert len(att_pool.losses) == 0
 
 
