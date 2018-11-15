@@ -6,11 +6,13 @@ from tensorflow.python.util import tf_inspect
 
 class Sequential(keras_Sequential):
 
+    # override
     def call(self, inputs, training=None, mask=None, **kwargs):
         outputs, _ = self._call_and_compute_mask(
             inputs, training=training, mask=mask, **kwargs)
         return outputs
 
+    # override
     def _call_and_compute_mask(self, inputs, training=None, mask=None, **kwargs):
         if not self.built:
             self.build(inputs.shape)
@@ -25,7 +27,7 @@ class Sequential(keras_Sequential):
                 # feed kwargs needed by layer.call only
                 call_args = set(full_arg_spec.args)
                 needed_kwargs = {
-                    key: val for key, val in kwargs
+                    key: val for key, val in kwargs.items()
                     if key in call_args
                 }
                 if 'mask' in call_args:
