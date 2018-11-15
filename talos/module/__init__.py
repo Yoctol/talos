@@ -1,1 +1,1 @@
-from .module import Sequential
+from .sequential import Sequential

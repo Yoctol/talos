@@ -1,9 +1,7 @@
 import tensorflow as tf
 
-from .module import Module
 
-
-class GlobalAttentionPooling1D(Module):
+class GlobalAttentionPooling1D(tf.keras.Model):
     """Reference: https://arxiv.org/pdf/1703.03130.pdf
     """
     def __init__(
@@ -13,8 +11,8 @@ class GlobalAttentionPooling1D(Module):
             activation: str = 'tanh',
             use_bias: bool = False,
             reg_coeff: float = 0.,
-            **kwargs,
         ):
+        super().__init__()
         if reg_coeff < 0:
             raise ValueError("reg_coeff can't be negative!")
         self.reg_coeff = reg_coeff
@@ -34,7 +32,6 @@ class GlobalAttentionPooling1D(Module):
             use_bias=False,
             name='softmax_layer',
         )
-        super().__init__(sub_layers=[self.candidate_layer, self.softmax_layer], **kwargs)
 
     def call(
             self,
@@ -70,3 +67,8 @@ class GlobalAttentionPooling1D(Module):
         if self._identity_matrix is None:
             self._identity_matrix = tf.eye(self.heads, batch_shape=[1])
         return self._identity_matrix
+
+    def compute_output_shape(self, input_shape):
+        output_shape = input_shape.as_list()
+        output_shape[1] = self.heads
+        return tf.TensorShape(output_shape)
