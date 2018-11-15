@@ -14,10 +14,7 @@ def chain_decode(
     ):
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
     if init_state is None:
-        batch_size = first_input.shape[0].value
-        if batch_size is None:
-            batch_size = tf.shape(first_input)[0]
-        init_state = get_default_init_state(cell, batch_size, first_input.dtype)
+        init_state = get_default_init_state(cell, first_input)
 
     inputs = first_input
     state = init_state
@@ -32,19 +29,30 @@ def chain_decode(
     return output_tensor
 
 
-def get_default_init_state(cell, batch_size, dtype):
+def get_default_init_state(cell, inputs):
+    # for tf.keras.layers cell
+    if hasattr(cell, 'get_initial_state'):
+        return to_list(cell.get_initial_state(inputs))
+
+    batch_size = inputs.shape[0].value
+    if batch_size is None:
+        batch_size = tf.shape(inputs)[0]
+
+    # for tf.nn.rnn_cell cell
     if hasattr(cell, 'zero_state'):
-        init_state = cell.zero_state(batch_size=batch_size, dtype=dtype)
+        return cell.zero_state(batch_size=batch_size, dtype=inputs.dtype)
     elif hasattr(cell, 'state_size'):
-        if hasattr(cell.state_size, '__len__'):
-            init_state = [
-                tf.zeros([batch_size, size], dtype=dtype)
-                for size in cell.state_size
-            ]
-        else:
-            init_state = [tf.zeros([batch_size, cell.state_size], dtype=dtype)]
+        return [
+            tf.zeros([batch_size, size], dtype=inputs.dtype)
+            for size in to_list(cell.state_size)
+        ]
     else:
         raise ValueError(
             "Cell should support `zero_state` or `state_size`."
             "otherwise, `init_state` should be given")
-    return init_state
+
+
+def to_list(x):
+    if hasattr(x, '__len__'):
+        return x
+    return [x]

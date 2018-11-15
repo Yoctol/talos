@@ -19,15 +19,12 @@ def beam_search_decode(
         output_width: int = 1,
     ) -> Tuple[tf.Tensor, tf.Tensor]:
     # example of next_input_producer: lambda logit: embedding_lookup(argmax(logit))
-    batch_size = first_input.shape[0].value
-    if batch_size is None:
-        batch_size = tf.shape(first_input)[0]
     if init_state is None:
-        init_state = get_default_init_state(cell, batch_size, first_input.dtype)
+        init_state = get_default_init_state(cell, first_input)
 
     inputs = first_input  # shape (N, d_i)
     state = init_state  # shape (N, d_s)
-    beam = Beam(batch_size=batch_size, width=beam_width, end_token=end_token)
+    beam = Beam(width=beam_width, end_token=end_token)
 
     for _ in range(maxlen):
         output, state = cell(inputs, state)  # shape (N, k, d_o), (N, k, d_s)
@@ -60,13 +57,11 @@ class Beam:
 
     def __init__(
             self,
-            batch_size: Union[int, tf.Tensor],
             width: int,
             score_func: Callable = tf.nn.log_softmax,
             end_token: int = None,
             length_penalty: Callable = lambda x: x,
         ):
-        self.batch_size = batch_size
         self.width = width
         self.end_token = end_token
 
@@ -128,7 +123,8 @@ class Beam:
     @_compute_length_penalty
     def _top_k_of_beam_and_choices(self, score):
         if score.shape.ndims == 3:
-            score = tf.reshape(score, shape=[self.batch_size, -1])
+            last_dim = score.shape[1].value * score.shape[2].value
+            score = tf.reshape(score, shape=[-1, last_dim])
         return tf.nn.top_k(score, k=self.width)
 
     def _new_seqlen_finished(self, choice_ids):
