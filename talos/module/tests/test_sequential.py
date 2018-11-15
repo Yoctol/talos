@@ -26,10 +26,8 @@ def test_additional_inputs(graph):
     sequential = Sequential([LayerNeedSeqlen(), tf.keras.layers.Dense(5)])
     inputs = tf.zeros([5, 4, 3], dtype=tf.float32)
     seqlen = tf.zeros([5], dtype=tf.int32)
-    try:
-        sequential(inputs, seqlen=seqlen)
-    except Exception:
-        pytest.fail("Failed to feed seqlen!")
+    # try: can successfully feed seqlen by keyword
+    sequential(inputs, seqlen=seqlen)
 
     with pytest.raises(TypeError):
         sequential(inputs)
@@ -51,10 +49,8 @@ def test_additional_inputs_with_layer_accept_kwargs(graph):
 
     sequential = Sequential([LayerSupportKWArgs(), tf.keras.layers.Dense(5)])
     inputs = tf.zeros([5, 4, 3], dtype=tf.float32)
-    try:
-        sequential(inputs, kwarg1=None, kwarg2=None)
-    except Exception:
-        pytest.fail("Failed to feed seqlen!")
+    # try: can successfully feed kwargs
+    sequential(inputs, kwarg1=None, kwarg2=None)
 
     with pytest.raises(AssertionError):
         sequential(inputs)

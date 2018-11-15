@@ -32,11 +32,8 @@ def test_global_attention_pooling_1d_reuse(graph):
         tf.zeros([batch_size, width, channel])
         for batch_size, width in zip([1, 2, 3], [4, 5, 6])
     ]
-    try:
-        # can call on any rank 3 tensor with same last dim.
-        [att_pool(inputs) for inputs in many_inputs]
-    except ValueError:
-        pytest.fail("GlobalAttentionPooling1D can't reuse!")
+    # try: can call on any rank 3 tensor with same last dim.
+    [att_pool(inputs) for inputs in many_inputs]
 
     losses = att_pool.losses
     assert len(losses) == len(many_inputs)  # any input has its reg loss
