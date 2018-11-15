@@ -31,6 +31,9 @@ def test_additional_inputs(graph):
     except Exception:
         pytest.fail("Failed to feed seqlen!")
 
+    with pytest.raises(TypeError):
+        sequential(inputs)
+
 
 def test_additional_inputs_with_layer_accept_kwargs(graph):
 
@@ -52,3 +55,6 @@ def test_additional_inputs_with_layer_accept_kwargs(graph):
         sequential(inputs, kwarg1=None, kwarg2=None)
     except Exception:
         pytest.fail("Failed to feed seqlen!")
+
+    with pytest.raises(AssertionError):
+        sequential(inputs)
