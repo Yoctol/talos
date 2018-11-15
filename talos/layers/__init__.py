@@ -1,3 +1,5 @@
+### Copy paste from
+### https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/layers/__init__.py
 from tensorflow.python.keras.engine.input_layer import Input
 from tensorflow.python.keras.engine.input_layer import InputLayer
 from tensorflow.python.keras.engine.base_layer import InputSpec
@@ -142,6 +144,8 @@ from tensorflow.python.keras.layers.wrappers import TimeDistributed
 # Serialization functions
 from tensorflow.python.keras.layers.serialization import deserialize
 from tensorflow.python.keras.layers.serialization import serialize
+
+### End copy paste
 
 # Self-defined layers
 from .conv1d_transpose import Conv1DTranspose
