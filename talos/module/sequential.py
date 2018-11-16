@@ -2,18 +2,49 @@ from tensorflow.python.eager import context
 from tensorflow.python.keras.engine.network import Network
 from tensorflow.python.keras.engine.sequential import Sequential as keras_Sequential
 from tensorflow.python.util import tf_inspect
+from tensorflow.python.keras.engine import base_layer
+from tensorflow.python.training.checkpointable import base as checkpointable
 
 
 class Sequential(keras_Sequential):
 
-    # override: add **kwargs
+    # HACK override: remove adding InputLayer part!!
+    # https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/engine/sequential.py#L122-L188
+    @checkpointable.no_automatic_dependency_tracking
+    def add(self, layer):
+        if not isinstance(layer, base_layer.Layer):
+            raise TypeError(
+                'The added layer must be '
+                'an instance of class Layer. '
+                f'Found: {layer}',
+            )
+        self.built = False
+
+        if self.outputs:
+            # If the model is being built continuously on top of an input layer:
+            # refresh its output.
+            output_tensor = layer(self.outputs[0])
+            if isinstance(output_tensor, list):
+                raise TypeError(
+                    'All layers in a Sequential model '
+                    'should have a single output tensor. '
+                    'For multi-output layers, '
+                    'use the functional API.',
+                )
+                self.outputs = [output_tensor]
+
+        self._layers.append(layer)
+        if self._layers:
+            self._track_layers(self._layers)
+
+    # HACK override: add **kwargs
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/sequential.py#L227-L233
     def call(self, inputs, training=None, mask=None, **kwargs):
         outputs, _ = self._call_and_compute_mask(
             inputs, training=training, mask=mask, **kwargs)
         return outputs
 
-    # override: add **kwargs
+    # HACK override: add **kwargs
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/sequential.py#L235-L257
     def _call_and_compute_mask(self, inputs, training=None, mask=None, **kwargs):
         if not self.built:
