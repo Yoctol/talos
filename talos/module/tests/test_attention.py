@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..attention import GlobalAttentionPooling1D
+from ..sequential import Sequential
 
 
 @pytest.yield_fixture(scope='function')
@@ -42,9 +43,13 @@ def test_global_attention_pooling_1d_reuse(graph):
 
 def test_global_attention_pooling_1d_invalid_input_rank(graph):
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5, 1])
+    rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3])
     with pytest.raises(ValueError):
-        att_pool(inputs)
+        att_pool(rank2_inputs)
+
+    rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5, 1])
+    with pytest.raises(ValueError):
+        att_pool(rank4_inputs)
 
 
 def test_global_attention_pooling_1d_value(graph):
@@ -62,3 +67,10 @@ def test_global_attention_pooling_1d_value(graph):
     max_val = np.max(inputs_val, axis=1, keepdims=True)
     # since attend_vec is a weighted average of inputs
     assert np.logical_and(min_val < attended_vec_val, attended_vec_val < max_val).all()
+
+
+def test_sequential_attention(graph):
+    att_pool = GlobalAttentionPooling1D(units=3, heads=4)
+    seq = Sequential([att_pool])
+    inputs = tf.random_normal(shape=[1, 3, 10])
+    seq(inputs)
