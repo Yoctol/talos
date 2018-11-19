@@ -49,7 +49,7 @@ def test_dynamic_rnn_value(graph):
             feed_dict={
                 inputs: np.random.rand(n_samples, maxlen, 3),
                 seqlen: seqlen_batch,
-            }
+            },
         )
 
     np.testing.assert_array_almost_equal(static_batch, dynamic_batch)
