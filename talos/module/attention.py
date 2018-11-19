@@ -48,7 +48,6 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             initializer=self.kernel_initializer,
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
-            dtype=self.dtype,
             trainable=True,
         )
         self.softmax_kernel = self.add_weight(
@@ -57,7 +56,6 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             initializer=self.kernel_initializer,
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
-            dtype=self.dtype,
             trainable=True,
         )
         if self.use_bias:
@@ -67,7 +65,6 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
                 initializer=self.bias_initializer,
                 regularizer=self.bias_regularizer,
                 constraint=self.bias_constraint,
-                dtype=self.dtype,
                 trainable=True,
             )
         else:
@@ -92,7 +89,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             # Renormalize for lower seqlen
             maxlen = inputs.shape[1].value
             # shape (N, T)
-            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=self.dtype)
+            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=weights.dtype)
             weights *= tf.expand_dims(mask, axis=2)
             weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
 
@@ -109,7 +106,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
 
     def _get_identity_matrix(self):
         if self._identity_matrix is None:
-            self._identity_matrix = tf.eye(self.heads, batch_shape=[1], dtype=self.dtype)
+            self._identity_matrix = tf.eye(self.heads, batch_shape=[1])
         return self._identity_matrix
 
     def compute_output_shape(self, input_shape):

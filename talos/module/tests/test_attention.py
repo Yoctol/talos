@@ -53,24 +53,39 @@ def test_global_attention_pooling_1d_invalid_input_rank(graph):
 
 
 def test_global_attention_pooling_1d_value(graph):
+    batch_size, maxlen = 3, 10
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
-    inputs = tf.random_normal(shape=[1, 3, 10])
-    attended_vec = att_pool(inputs)
+    inputs = tf.random_normal(shape=[batch_size, maxlen, 10])
+    seqlen = tf.random_uniform(
+        minval=3,
+        maxval=maxlen,
+        shape=[batch_size],
+        dtype=tf.int32,
+    )
+    attended_vec = att_pool(inputs, seqlen=seqlen)
 
     with tf.Session(graph=graph) as sess:
         sess.run(tf.variables_initializer(
             var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
         )
-        inputs_val, attended_vec_val = sess.run([inputs, attended_vec])
+        inputs_val, seqlen_val, attended_vec_val = sess.run(
+            [inputs, seqlen, attended_vec])
 
-    min_val = np.min(inputs_val, axis=1, keepdims=True)
-    max_val = np.max(inputs_val, axis=1, keepdims=True)
     # since attend_vec is a weighted average of inputs
-    assert np.logical_and(min_val < attended_vec_val, attended_vec_val < max_val).all()
+    for row, length, vec in zip(inputs_val, seqlen_val, attended_vec_val):
+        min_val = np.min(row[:length], axis=0, keepdims=True)
+        max_val = np.max(row[:length], axis=0, keepdims=True)
+        assert np.logical_and(min_val < vec, vec < max_val).all()
 
 
 def test_sequential_attention(graph):
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     seq = Sequential([att_pool])
     inputs = tf.random_normal(shape=[1, 3, 10])
-    seq(inputs)
+    seqlen = tf.random_uniform(
+        minval=1,
+        maxval=3,
+        shape=[1],
+        dtype=tf.int32,
+    )
+    seq(inputs, seqlen=seqlen)
