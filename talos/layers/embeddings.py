@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 
@@ -5,8 +6,8 @@ class Embedding(tf.keras.layers.Embedding):
 
     def __init__(
             self,
-            input_dim,
-            output_dim,
+            vocab_size,
+            embeddings_dim,
             embeddings_initializer='uniform',
             embeddings_regularizer=None,
             activity_regularizer=None,
@@ -23,8 +24,8 @@ class Embedding(tf.keras.layers.Embedding):
         dtype = kwargs.pop('dtype', tf.float32)
         super(tf.keras.layers.Embedding, self).__init__(dtype=dtype, **kwargs)
 
-        self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.input_dim = self.vocab_size = vocab_size
+        self.output_dim = self.embeddings_dim = embeddings_dim
         self.embeddings_initializer = tf.keras.initializers.get(embeddings_initializer)
         self.embeddings_regularizer = tf.keras.regularizers.get(embeddings_regularizer)
         self.activity_regularizer = tf.keras.regularizers.get(activity_regularizer)
@@ -34,6 +35,20 @@ class Embedding(tf.keras.layers.Embedding):
         self.mask_index = mask_index
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
+
+    @classmethod
+    def from_weights(cls, weights: np.ndarray, mask_index=None, **kwargs):
+        if weights.ndim != 2:
+            raise ValueError(f"`weights` should be a rank 2 array! Recieved shape: {weights.shape}")
+        input_dim, output_dim = weights.shape
+        initializer = tf.constant_initializer(weights)
+        return cls(
+            input_dim,
+            output_dim,
+            embeddings_initializer=initializer,
+            mask_index=mask_index,
+            **kwargs,
+        )
 
     def _valid_mask_index(self, mask_index):
         if mask_index is None:
@@ -51,8 +66,8 @@ class Embedding(tf.keras.layers.Embedding):
 
     def get_config(self):
         config = {
-            'input_dim': self.input_dim,
-            'output_dim': self.output_dim,
+            'vocab_size': self.vocab_size,
+            'embeddings_dim': self.embeddings_dim,
             'embeddings_initializer': tf.keras.initializers.serialize(self.embeddings_initializer),
             'embeddings_regularizer': tf.keras.regularizers.serialize(self.embeddings_regularizer),
             'activity_regularizer': tf.keras.regularizers.serialize(self.activity_regularizer),
