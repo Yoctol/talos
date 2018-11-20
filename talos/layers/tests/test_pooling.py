@@ -3,8 +3,9 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from ..attention import GlobalAttentionPooling1D
-from ..sequential import Sequential
+from talos.module import Sequential
+from ..pooling import GlobalAttentionPooling1D
+from ..pooling import GlobalAveragePooling1D
 
 
 @pytest.yield_fixture(scope='function')
@@ -89,3 +90,29 @@ def test_sequential_attention(graph):
         dtype=tf.int32,
     )
     seq(inputs, seqlen=seqlen)
+
+
+def test_average_pooling_mask_value(graph):
+    pool = GlobalAveragePooling1D()
+    inputs = tf.placeholder(tf.float32, [None, 5, 1])
+    seqlen = tf.placeholder(tf.int32, [None])
+    outputs = pool(inputs, seqlen=seqlen)
+
+    inputs_val = np.array([
+        [[0], [1], [2], [3], [4]],
+        [[2], [3], [4], [5], [6]],
+    ], dtype=np.float32)
+    with tf.Session(graph=graph) as sess:
+        sess.run(tf.variables_initializer(
+            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
+        )
+        outputs_val = sess.run(
+            outputs,
+            feed_dict={
+                inputs: inputs_val,
+                seqlen: [2, 4],
+            },
+        )
+
+    expected_outputs_val = np.array([[0.5], [3.5]], dtype=np.float32)
+    np.testing.assert_array_almost_equal(outputs_val, expected_outputs_val)

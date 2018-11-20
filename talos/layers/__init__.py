@@ -95,7 +95,8 @@ from tensorflow.python.keras.layers.pooling import MaxPooling3D
 from tensorflow.python.keras.layers.pooling import AveragePooling1D
 from tensorflow.python.keras.layers.pooling import AveragePooling2D
 from tensorflow.python.keras.layers.pooling import AveragePooling3D
-from tensorflow.python.keras.layers.pooling import GlobalAveragePooling1D
+# overrided
+# from tensorflow.python.keras.layers.pooling import GlobalAveragePooling1D
 from tensorflow.python.keras.layers.pooling import GlobalAveragePooling2D
 from tensorflow.python.keras.layers.pooling import GlobalAveragePooling3D
 from tensorflow.python.keras.layers.pooling import GlobalMaxPooling1D
@@ -109,7 +110,8 @@ from tensorflow.python.keras.layers.pooling import MaxPool3D
 from tensorflow.python.keras.layers.pooling import AvgPool1D
 from tensorflow.python.keras.layers.pooling import AvgPool2D
 from tensorflow.python.keras.layers.pooling import AvgPool3D
-from tensorflow.python.keras.layers.pooling import GlobalAvgPool1D
+# overrided
+# from tensorflow.python.keras.layers.pooling import GlobalAvgPool1D
 from tensorflow.python.keras.layers.pooling import GlobalAvgPool2D
 from tensorflow.python.keras.layers.pooling import GlobalAvgPool3D
 from tensorflow.python.keras.layers.pooling import GlobalMaxPool1D
@@ -147,3 +149,8 @@ from tensorflow.python.keras.layers.serialization import serialize
 # Self-defined layers
 from .conv1d_transpose import Conv1DTranspose
 from .embeddings import Embedding
+
+from .pooling import GlobalAveragePooling1D
+from .pooling import GlobalAttentionPooling1D
+from .pooling import GlobalAvgPool1D
+from .pooling import GlobalAttPool1D

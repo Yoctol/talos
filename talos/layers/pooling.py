@@ -1,7 +1,52 @@
+import abc
+
 import tensorflow as tf
 
 
-class GlobalAttentionPooling1D(tf.keras.layers.Layer):
+class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
+    """Abstract class for different global pooling 1D layers.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.input_spec = tf.keras.layers.InputSpec(ndim=3)
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tf.TensorShape(input_shape).as_list()
+        return tf.TensorShape([input_shape[0], input_shape[2]])
+
+    @abc.abstractmethod
+    def call(self, inputs, seqlen=None, mask=None):
+        pass
+
+    def _get_mask(self, inputs, seqlen, mask):
+        # if there's a mask, use mask first
+        if mask is not None:
+            return tf.cast(mask, inputs.dtype)
+        elif seqlen is not None:
+            maxlen = inputs.shape[1].value
+            return tf.sequence_mask(seqlen, maxlen=maxlen, dtype=inputs.dtype)  # shape (N, T)
+        else:
+            return None
+
+
+class GlobalAveragePooling1D(GlobalPooling1D):
+
+    def call(self, inputs, seqlen=None, mask=None):
+        casted_mask = self._get_mask(inputs, seqlen, mask)
+        if casted_mask is None:
+            return tf.reduce_mean(inputs, axis=1)
+
+        # compute mean on True part
+        casted_mask = tf.expand_dims(casted_mask, axis=2)
+        # if there's a mask, use mask first
+        if mask is not None:
+            true_count = tf.reduce_sum(mask, axis=1)
+        else:
+            true_count = tf.expand_dims(tf.cast(seqlen, inputs.dtype), axis=1)
+        return tf.reduce_sum(inputs * casted_mask, axis=1) / true_count
+
+
+class GlobalAttentionPooling1D(GlobalPooling1D):
     """Reference: https://arxiv.org/pdf/1703.03130.pdf
     """
     def __init__(
@@ -39,7 +84,6 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             raise ValueError("reg_coeff can't be negative!")
         self.reg_coeff = reg_coeff
         self._identity_matrix = None
-        self.input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     def build(self, input_shape):
         self.candidate_kernel = self.add_weight(
@@ -75,6 +119,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             self,
             inputs: tf.Tensor,
             seqlen: tf.Tensor = None,
+            mask: tf.Tensor = None,
         ) -> tf.Tensor:
         # shape (N, T, units)
         hidden_outputs = tf.tensordot(inputs, self.candidate_kernel, axes=[[2], [0]])
@@ -85,11 +130,10 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
         # shape (N, T, Head)
         logits = tf.tensordot(hidden_outputs, self.softmax_kernel, axes=[[2], [0]])
         weights = tf.nn.softmax(logits, axis=1)
-        if seqlen is not None:
+
+        mask = self._get_mask(inputs, seqlen, mask)
+        if mask is not None:
             # Renormalize for lower seqlen
-            maxlen = inputs.shape[1].value
-            # shape (N, T)
-            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=weights.dtype)
             weights *= tf.expand_dims(mask, axis=2)
             weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
 
@@ -113,3 +157,9 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
         output_shape = input_shape.as_list()
         output_shape[1] = self.heads
         return tf.TensorShape(output_shape)
+
+
+# Aliases
+
+GlobalAvgPool1D = GlobalAveragePooling1D
+GlobalAttPool1D = GlobalAttentionPooling1D
