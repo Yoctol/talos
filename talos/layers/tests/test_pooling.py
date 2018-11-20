@@ -3,8 +3,8 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from ..attention import GlobalAttentionPooling1D
-from ..sequential import Sequential
+from talos.module import Sequential
+from ..pooling import GlobalAttentionPooling1D
 
 
 @pytest.yield_fixture(scope='function')
