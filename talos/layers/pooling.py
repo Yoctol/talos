@@ -15,11 +15,11 @@ class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
         return tf.TensorShape([input_shape[0], input_shape[2]])
 
     @abc.abstractmethod
-    def call(self, inputs, seqlen, mask):
+    def call(self, inputs, seqlen=None, mask=None):
         pass
 
-    @staticmethod
-    def _get_mask(inputs, seqlen, mask):
+    def _get_mask(self, inputs, seqlen, mask):
+        # if there's a mask, use mask first
         if mask is not None:
             return tf.cast(mask, inputs.dtype)
         elif seqlen is not None:
@@ -31,12 +31,19 @@ class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
 
 class GlobalAveragePooling1D(GlobalPooling1D):
 
-    def call(self, inputs, seqlen, mask):
-        mask = self._get_mask(inputs, mask, seqlen)
+    def call(self, inputs, seqlen=None, mask=None):
+        casted_mask = self._get_mask(inputs, seqlen, mask)
+        if casted_mask is None:
+            return tf.reduce_mean(inputs, axis=1)
+
+        # compute mean on True part
+        casted_mask = tf.expand_dims(casted_mask, axis=2)
+        # if there's a mask, use mask first
         if mask is not None:
-            inputs *= tf.expand_dims(mask, axis=2)
-            return tf.reduce_sum(inputs, axis=1) / tf.reduce_sum(mask, axis=1)
-        return tf.mean(inputs, axis=1)
+            true_count = tf.reduce_sum(mask, axis=1)
+        else:
+            true_count = tf.expand_dims(tf.cast(seqlen, inputs.dtype), axis=1)
+        return tf.reduce_sum(inputs * casted_mask, axis=1) / true_count
 
 
 class GlobalAttentionPooling1D(GlobalPooling1D):
