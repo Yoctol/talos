@@ -157,3 +157,9 @@ class GlobalAttentionPooling1D(GlobalPooling1D):
         output_shape = input_shape.as_list()
         output_shape[1] = self.heads
         return tf.TensorShape(output_shape)
+
+
+# Aliases
+
+GlobalAvgPool1D = GlobalAveragePooling1D
+GlobalAttPool1D = GlobalAttentionPooling1D
