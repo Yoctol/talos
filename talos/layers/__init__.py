@@ -58,9 +58,6 @@ from tensorflow.python.keras.layers.core import Lambda
 from tensorflow.python.keras.layers.core import Dense
 from tensorflow.python.keras.layers.core import ActivityRegularization
 
-# Embedding layers.
-from tensorflow.python.keras.layers.embeddings import Embedding
-
 # Locally-connected layers.
 from tensorflow.python.keras.layers.local import LocallyConnected1D
 from tensorflow.python.keras.layers.local import LocallyConnected2D
@@ -149,3 +146,4 @@ from tensorflow.python.keras.layers.serialization import serialize
 
 # Self-defined layers
 from .conv1d_transpose import Conv1DTranspose
+from .embeddings import Embedding
