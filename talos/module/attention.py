@@ -39,6 +39,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             raise ValueError("reg_coeff can't be negative!")
         self.reg_coeff = reg_coeff
         self._identity_matrix = None
+        self.supports_masking = False
         self.input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     def build(self, input_shape):
@@ -75,6 +76,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             self,
             inputs: tf.Tensor,
             seqlen: tf.Tensor = None,
+            mask: tf.Tensor = None,
         ) -> tf.Tensor:
         # shape (N, T, units)
         hidden_outputs = tf.tensordot(inputs, self.candidate_kernel, axes=[[2], [0]])
@@ -85,11 +87,15 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
         # shape (N, T, Head)
         logits = tf.tensordot(hidden_outputs, self.softmax_kernel, axes=[[2], [0]])
         weights = tf.nn.softmax(logits, axis=1)
-        if seqlen is not None:
-            # Renormalize for lower seqlen
+
+        if mask is not None:
+            mask = tf.cast(mask, weights.dtype)
+        elif seqlen is not None:
             maxlen = inputs.shape[1].value
-            # shape (N, T)
-            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=weights.dtype)
+            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=weights.dtype)  # shape (N, T)
+
+        if mask is not None:
+            # Renormalize for lower seqlen
             weights *= tf.expand_dims(mask, axis=2)
             weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
 
