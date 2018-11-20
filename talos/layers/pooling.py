@@ -1,7 +1,45 @@
+import abc
+
 import tensorflow as tf
 
 
-class GlobalAttentionPooling1D(tf.keras.layers.Layer):
+class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
+    """Abstract class for different global pooling 1D layers.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.input_spec = tf.keras.layers.InputSpec(ndim=3)
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tf.TensorShape(input_shape).as_list()
+        return tf.TensorShape([input_shape[0], input_shape[2]])
+
+    @abc.abstractmethod
+    def call(self, inputs, seqlen, mask):
+        pass
+
+    @staticmethod
+    def _get_mask(inputs, seqlen, mask):
+        if mask is not None:
+            return tf.cast(mask, inputs.dtype)
+        elif seqlen is not None:
+            maxlen = inputs.shape[1].value
+            return tf.sequence_mask(seqlen, maxlen=maxlen, dtype=inputs.dtype)  # shape (N, T)
+        else:
+            return None
+
+
+class GlobalAveragePooling1D(GlobalPooling1D):
+
+    def call(self, inputs, seqlen, mask):
+        mask = self._get_mask(inputs, mask, seqlen)
+        if mask is not None:
+            inputs *= tf.expand_dims(mask, axis=2)
+            return tf.reduce_sum(inputs, axis=1) / tf.reduce_sum(mask, axis=1)
+        return tf.mean(inputs, axis=1)
+
+
+class GlobalAttentionPooling1D(GlobalPooling1D):
     """Reference: https://arxiv.org/pdf/1703.03130.pdf
     """
     def __init__(
@@ -39,8 +77,6 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
             raise ValueError("reg_coeff can't be negative!")
         self.reg_coeff = reg_coeff
         self._identity_matrix = None
-        self.supports_masking = False
-        self.input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     def build(self, input_shape):
         self.candidate_kernel = self.add_weight(
@@ -88,12 +124,7 @@ class GlobalAttentionPooling1D(tf.keras.layers.Layer):
         logits = tf.tensordot(hidden_outputs, self.softmax_kernel, axes=[[2], [0]])
         weights = tf.nn.softmax(logits, axis=1)
 
-        if mask is not None:
-            mask = tf.cast(mask, weights.dtype)
-        elif seqlen is not None:
-            maxlen = inputs.shape[1].value
-            mask = tf.sequence_mask(seqlen, maxlen=maxlen, dtype=weights.dtype)  # shape (N, T)
-
+        mask = self._get_mask(inputs, seqlen, mask)
         if mask is not None:
             # Renormalize for lower seqlen
             weights *= tf.expand_dims(mask, axis=2)
