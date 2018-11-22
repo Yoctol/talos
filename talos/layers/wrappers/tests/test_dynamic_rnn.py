@@ -53,3 +53,13 @@ def test_dynamic_rnn_value(graph):
         )
 
     np.testing.assert_array_almost_equal(static_batch, dynamic_batch)
+
+
+def test_dynamic_rnn_return_sequences_shape(graph):
+    cell = tf.keras.layers.GRUCell(5)
+    layer = DynamicRecurrent(cell, return_sequences=True)
+    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 4, 3])
+    seqlen = tf.placeholder(dtype=tf.int32, shape=[None])
+    # NOTE should call dynamic first
+    outputs = layer(inputs, seqlen=seqlen)
+    assert outputs.shape.as_list() == [None, 4, 5]

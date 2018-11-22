@@ -9,10 +9,14 @@ class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.input_spec = tf.keras.layers.InputSpec(ndim=3)
+        self.support_masking = True
 
     def compute_output_shape(self, input_shape):
         input_shape = tf.TensorShape(input_shape).as_list()
         return tf.TensorShape([input_shape[0], input_shape[2]])
+
+    def compute_mask(self, inputs, mask):
+        return None
 
     @abc.abstractmethod
     def call(self, inputs, seqlen=None, mask=None):
@@ -21,10 +25,13 @@ class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
     def _get_mask(self, inputs, seqlen, mask):
         # if there's a mask, use mask first
         if mask is not None:
-            return tf.cast(mask, inputs.dtype)
+            return tf.expand_dims(tf.cast(mask, inputs.dtype), axis=2)
         elif seqlen is not None:
             maxlen = inputs.shape[1].value
-            return tf.sequence_mask(seqlen, maxlen=maxlen, dtype=inputs.dtype)  # shape (N, T)
+            return tf.expand_dims(
+                tf.sequence_mask(seqlen, maxlen=maxlen, dtype=inputs.dtype),
+                axis=2,
+            )  # shape (N, T, 1)
         else:
             return None
 
@@ -37,10 +44,9 @@ class GlobalAveragePooling1D(GlobalPooling1D):
             return tf.reduce_mean(inputs, axis=1)
 
         # compute mean on True part
-        casted_mask = tf.expand_dims(casted_mask, axis=2)
         # if there's a mask, use mask first
         if mask is not None:
-            true_count = tf.reduce_sum(mask, axis=1)
+            true_count = tf.reduce_sum(casted_mask, axis=1)
         else:
             true_count = tf.expand_dims(tf.cast(seqlen, inputs.dtype), axis=1)
         return tf.reduce_sum(inputs * casted_mask, axis=1) / true_count
@@ -122,6 +128,10 @@ class GlobalAttentionPooling1D(GlobalPooling1D):
             mask: tf.Tensor = None,
         ) -> tf.Tensor:
         # shape (N, T, units)
+        mask = self._get_mask(inputs, seqlen, mask)
+        if mask is not None:
+            inputs *= mask
+
         hidden_outputs = tf.tensordot(inputs, self.candidate_kernel, axes=[[2], [0]])
         if self.use_bias:
             hidden_outputs = tf.nn.bias_add(hidden_outputs, self.bias)
@@ -131,10 +141,9 @@ class GlobalAttentionPooling1D(GlobalPooling1D):
         logits = tf.tensordot(hidden_outputs, self.softmax_kernel, axes=[[2], [0]])
         weights = tf.nn.softmax(logits, axis=1)
 
-        mask = self._get_mask(inputs, seqlen, mask)
         if mask is not None:
             # Renormalize for lower seqlen
-            weights *= tf.expand_dims(mask, axis=2)
+            weights *= mask
             weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
 
         if self.reg_coeff > 0:
