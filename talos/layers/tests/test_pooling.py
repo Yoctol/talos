@@ -116,3 +116,13 @@ def test_average_pooling_mask_value(graph):
 
     expected_outputs_val = np.array([[0.5], [3.5]], dtype=np.float32)
     np.testing.assert_array_almost_equal(outputs_val, expected_outputs_val)
+
+
+def test_given_mask(graph):
+    att_pool = GlobalAttentionPooling1D(units=3, heads=4)
+    pool = GlobalAveragePooling1D()
+    inputs = tf.placeholder(tf.float32, [None, 5, 1])
+    masked_inputs = tf.keras.layers.Masking()(inputs)
+
+    att_pool(masked_inputs)
+    pool(masked_inputs)
