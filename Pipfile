@@ -10,6 +10,7 @@ tensorflow = "==1.11.0"
 pytest = "==3.7.3"
 pytest-mock = "*"
 "flake8-config-yoctol" = ">=0.0.11"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.6"
