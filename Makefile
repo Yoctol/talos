@@ -12,7 +12,7 @@ lint:
 
 .PHONY: test
 test:
-	pytest
+	pytest --cov=talos/ --cov-fail-under=90
 
 .PHONY: all
 all: test lint
