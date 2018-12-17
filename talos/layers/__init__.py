@@ -154,3 +154,5 @@ from .pooling import GlobalAveragePooling1D
 from .pooling import GlobalAttentionPooling1D
 from .pooling import GlobalAvgPool1D
 from .pooling import GlobalAttPool1D
+
+import talos.layers.wrappers
