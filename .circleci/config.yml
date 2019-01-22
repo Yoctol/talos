@@ -30,7 +30,7 @@ jobs:
           command: pipenv run python -m flake8 .
       - run:
           name: Test
-          command: pipenv run pytest
+          command: pipenv run make test
 
 workflows:
   version: 2
