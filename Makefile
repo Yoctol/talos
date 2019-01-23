@@ -14,6 +14,10 @@ lint:
 test:
 	pytest --cov=talos/ --cov-fail-under=90
 
+.PHONY: test-report
+test-report:
+	pytest -W ignore --cov=talos/ --cov-report term-missing
+
 .PHONY: all
 all: test lint
 
