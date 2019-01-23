@@ -48,8 +48,10 @@ class GlobalAveragePooling1D(GlobalPooling1D):
         if mask is not None:
             true_count = tf.reduce_sum(casted_mask, axis=1)
         else:
-            true_count = tf.expand_dims(tf.cast(seqlen, inputs.dtype), axis=1)
-        return tf.reduce_sum(inputs * casted_mask, axis=1) / true_count
+            seqlen = tf.cast(seqlen, inputs.dtype)
+            true_count = seqlen[:, tf.newaxis]
+        eps = tf.keras.backend.epsilon()
+        return tf.reduce_sum(inputs * casted_mask, axis=1) / (true_count + eps)
 
 
 class GlobalAttentionPooling1D(GlobalPooling1D):
@@ -144,7 +146,8 @@ class GlobalAttentionPooling1D(GlobalPooling1D):
         if mask is not None:
             # Renormalize for lower seqlen
             weights *= mask
-            weights /= tf.reduce_sum(weights, axis=1, keepdims=True)
+            eps = tf.keras.backend.epsilon()
+            weights /= (tf.reduce_sum(weights, axis=1, keepdims=True) + eps)
 
         if self.reg_coeff > 0:
             weights_product = tf.matmul(weights, weights, transpose_a=True)
