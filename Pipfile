@@ -7,7 +7,7 @@ url = "https://pypi.org/simple"
 tensorflow = "==1.11.0"
 
 [dev-packages]
-pytest = "==3.7.3"
+pytest = "*"
 pytest-mock = "*"
 "flake8-config-yoctol" = ">=0.0.11"
 pytest-cov = "*"
