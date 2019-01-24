@@ -57,7 +57,7 @@ def test_global_attention_pooling_1d_value(sess):
     )
     attended_vec = att_pool(inputs, seqlen=seqlen)
 
-    sess.run(tf.global_variables_initializer())
+    sess.run(tf.variables_initializer(var_list=att_pool.variables))
     inputs_val, seqlen_val, attended_vec_val = sess.run(
         [inputs, seqlen, attended_vec])
 
