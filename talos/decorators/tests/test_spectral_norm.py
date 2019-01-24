@@ -3,7 +3,7 @@ import tensorflow as tf
 from ..spectral_norm import add_spectral_norm
 
 
-def test_spectral_norm_dense(graph):
+def test_spectral_norm_dense():
     dense_layer = tf.keras.layers.Dense(10)
     add_spectral_norm(dense_layer)
 
@@ -16,7 +16,7 @@ def test_spectral_norm_dense(graph):
     assert len(dense_layer.trainable_variables) == 2
 
 
-def test_spectral_norm_gru(graph):
+def test_spectral_norm_gru():
     gru_cell = tf.nn.rnn_cell.GRUCell(10)
     add_spectral_norm(gru_cell)
 

@@ -8,7 +8,7 @@ from ..pooling import GlobalAttentionPooling1D
 from ..pooling import GlobalAveragePooling1D
 
 
-def test_global_attention_pooling_1d(graph):
+def test_global_attention_pooling_1d():
     width, channel = 10, 4
     units, heads = 3, 5
     att_pool = GlobalAttentionPooling1D(units=units, heads=heads)
@@ -20,7 +20,7 @@ def test_global_attention_pooling_1d(graph):
     assert len(att_pool.losses) == 0
 
 
-def test_global_attention_pooling_1d_reuse(graph):
+def test_global_attention_pooling_1d_reuse():
     channel, units, heads = 3, 4, 5
     att_pool = GlobalAttentionPooling1D(units=units, heads=heads, reg_coeff=1.0)
     many_inputs = [
@@ -35,7 +35,7 @@ def test_global_attention_pooling_1d_reuse(graph):
     assert all(loss.shape.as_list() == [] for loss in losses)
 
 
-def test_global_attention_pooling_1d_invalid_input_rank(graph):
+def test_global_attention_pooling_1d_invalid_input_rank():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3])
     with pytest.raises(ValueError):
@@ -46,7 +46,7 @@ def test_global_attention_pooling_1d_invalid_input_rank(graph):
         att_pool(rank4_inputs)
 
 
-def test_global_attention_pooling_1d_value(graph):
+def test_global_attention_pooling_1d_value():
     batch_size, maxlen = 3, 10
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     inputs = tf.random_normal(shape=[batch_size, maxlen, 10])
@@ -58,10 +58,8 @@ def test_global_attention_pooling_1d_value(graph):
     )
     attended_vec = att_pool(inputs, seqlen=seqlen)
 
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         inputs_val, seqlen_val, attended_vec_val = sess.run(
             [inputs, seqlen, attended_vec])
 

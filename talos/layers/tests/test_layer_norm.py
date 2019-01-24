@@ -16,14 +16,12 @@ def test_output_shape(layer):
     assert layer(tf.zeros(shape)).shape.as_list() == shape
 
 
-def test_output_value(graph, layer):
+def test_output_value(layer):
     inputs = tf.constant([[1., 2., 3.], [4., 5., 6.]])
     outputs = layer(inputs)
 
     with tf.Session() as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
+        sess.run(tf.global_variables_initializer())
         np.testing.assert_array_almost_equal(
             sess.run(outputs),
             np.array([

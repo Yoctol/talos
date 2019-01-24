@@ -4,7 +4,7 @@ import tensorflow as tf
 from ..dynamic_rnn import DynamicRecurrent
 
 
-def test_dynamic_rnn_shape(graph):
+def test_dynamic_rnn_shape():
     cell = tf.keras.layers.GRUCell(5)
     layer = DynamicRecurrent(cell)
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, 4, 3])
@@ -14,7 +14,7 @@ def test_dynamic_rnn_shape(graph):
     assert outputs.shape.as_list() == [None, 5]
 
 
-def test_dynamic_rnn_value(graph):
+def test_dynamic_rnn_value():
     cell = tf.keras.layers.LSTMCell(5)
     static_layer = tf.keras.layers.RNN(cell, return_sequences=True)
     dynamic_layer = DynamicRecurrent(cell)
@@ -31,10 +31,8 @@ def test_dynamic_rnn_value(graph):
 
     n_samples = 10
     seqlen_batch = np.random.randint(low=2, high=maxlen + 1, size=[n_samples])
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         static_batch, dynamic_batch = sess.run(
             [static_outputs, dynamic_outputs],
             feed_dict={
@@ -46,7 +44,7 @@ def test_dynamic_rnn_value(graph):
     np.testing.assert_array_almost_equal(static_batch, dynamic_batch)
 
 
-def test_dynamic_rnn_return_sequences_shape(graph):
+def test_dynamic_rnn_return_sequences_shape():
     cell = tf.keras.layers.GRUCell(5)
     layer = DynamicRecurrent(cell, return_sequences=True)
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, 4, 3])

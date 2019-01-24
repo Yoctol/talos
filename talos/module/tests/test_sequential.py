@@ -5,7 +5,7 @@ import tensorflow as tf
 from ..sequential import Sequential
 
 
-def test_build_sublayers_when_first_called(graph):
+def test_build_sublayers_when_first_called():
     sequential = Sequential([
         tf.keras.layers.Embedding(20, 10),
         tf.keras.layers.LSTM(10, return_sequences=True),
@@ -28,12 +28,12 @@ def test_context_manager_work_when_first_called(graph):
     with tf.variable_scope('scope'):
         inputs = tf.zeros([1, 3], dtype=tf.float32)
         sequential(inputs)
-    variables = graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    variables = tf.trainable_variables()
     assert all(var.graph is graph for var in variables)
     assert all(var.name.startswith('scope') for var in variables)
 
 
-def test_additional_inputs(graph):
+def test_additional_inputs():
 
     class LayerNeedSeqlen(tf.keras.layers.Layer):
 
@@ -54,7 +54,7 @@ def test_additional_inputs(graph):
         sequential(inputs)
 
 
-def test_additional_inputs_with_layer_accept_kwargs(graph):
+def test_additional_inputs_with_layer_accept_kwargs():
 
     class LayerSupportKWArgs(tf.keras.layers.Layer):
 

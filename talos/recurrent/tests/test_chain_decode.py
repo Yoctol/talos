@@ -38,7 +38,7 @@ def test_chain_decode_logic(mocker):
     assert output == expected_output
 
 
-def test_chain_decode_tf(graph):
+def test_chain_decode_tf():
     batch_size, maxlen = 6, 5
     cell = tf.keras.layers.LSTMCell(units=5)
     first_input = tf.placeholder(shape=[batch_size, 3], dtype=tf.float32)
