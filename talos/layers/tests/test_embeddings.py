@@ -6,8 +6,12 @@ import tensorflow as tf
 from ..embeddings import Embedding
 
 
-def test_mask_shape(sess):
-    inputs = tf.placeholder(tf.int32, shape=[None, 3])
+@pytest.fixture(scope='module')
+def inputs():
+    return tf.placeholder(tf.int32, shape=[None, 3])
+
+
+def test_mask_index(inputs, sess):
     embed_layer = Embedding(vocab_size=3, embeddings_dim=5, mask_index=1)
     outputs = embed_layer(inputs)
     assert outputs.shape.as_list() == [None, 3, 5]
@@ -17,15 +21,13 @@ def test_mask_shape(sess):
         outputs._keras_mask,
         feed_dict={inputs: [[0, 1, 2]]},
     )
-
     assert np.array_equal(mask_val, np.array([[True, False, True]]))
 
 
-def test_construct_from_weights(sess):
+def test_construct_from_weights(inputs, sess):
     weights = np.array([[0, 1], [2, 3], [4, 5]], dtype=np.float32)
-    inputs = tf.placeholder(tf.int32, shape=[None, 3])
     embed_layer = Embedding.from_weights(weights)
-    embed_layer(inputs)
+    embed_layer(inputs)  # to build variables
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
     weights_val = sess.run(embed_layer.embeddings)
