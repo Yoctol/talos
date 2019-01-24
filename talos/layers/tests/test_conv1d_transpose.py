@@ -88,10 +88,14 @@ def test_output_value_same_padding(sess):
     )
 
 
-def test_invalid_input_rank():
-    rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5, 1])
+@pytest.mark.parametrize('invalid_inputs', [
+    tf.zeros(shape=[2, 3]),
+    tf.zeros(shape=[2, 3, 1, 1]),
+])
+def test_invalid_input_rank(invalid_inputs):
+    layer = Conv1DTranspose(filters=10, kernel_size=5)
     with pytest.raises(ValueError):
-        Conv1DTranspose(filters=10, kernel_size=5)(rank4_inputs)
+        layer(invalid_inputs)
 
 
 def test_invalid_input_shape():

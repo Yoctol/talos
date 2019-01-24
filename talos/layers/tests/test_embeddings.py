@@ -33,10 +33,10 @@ def test_construct_from_weights(sess):
     np.testing.assert_array_almost_equal(weights, weights_val)
 
 
-def test_construct_from_invalid_weights():
-    rank1_weights = np.random.rand(5)
-    rank3_weights = np.random.rand(1, 2, 3)
+@pytest.mark.parametrize('invalid_weights', [
+    np.zeros([5]),
+    np.zeros([1, 2, 3]),
+])
+def test_construct_from_invalid_weights(invalid_weights):
     with pytest.raises(ValueError):
-        Embedding.from_weights(rank1_weights)
-    with pytest.raises(ValueError):
-        Embedding.from_weights(rank3_weights)
+        Embedding.from_weights(invalid_weights)

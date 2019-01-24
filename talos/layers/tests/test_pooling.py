@@ -35,15 +35,14 @@ def test_global_attention_pooling_1d_reuse():
     assert all(loss.shape.as_list() == [] for loss in losses)
 
 
-def test_global_attention_pooling_1d_invalid_input_rank():
+@pytest.mark.parametrize('invalid_inputs', [
+    tf.zeros(shape=[2, 3]),
+    tf.zeros(shape=[2, 3, 1, 1]),
+])
+def test_global_attention_pooling_1d_invalid_input_rank(invalid_inputs):
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
-    rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3])
     with pytest.raises(ValueError):
-        att_pool(rank2_inputs)
-
-    rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3, 5, 1])
-    with pytest.raises(ValueError):
-        att_pool(rank4_inputs)
+        att_pool(invalid_inputs)
 
 
 def test_global_attention_pooling_1d_value(sess):
