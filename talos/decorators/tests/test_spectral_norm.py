@@ -11,9 +11,9 @@ def test_spectral_norm_dense():
     dense_layer(inputs)
 
     assert len(dense_layer.updates) == 1
-    assert dense_layer.updates[0].name == "dense/kernel/power_iter"
-    assert dense_layer.kernel.name == "dense/kernel_sn:0"
     assert len(dense_layer.trainable_variables) == 2
+    assert dense_layer.updates[0].name == dense_layer.name + "/kernel/power_iter"
+    assert dense_layer.kernel.name == dense_layer.name + "/kernel_sn:0"
 
 
 def test_spectral_norm_gru():
