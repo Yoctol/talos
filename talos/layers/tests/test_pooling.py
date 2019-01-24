@@ -8,14 +8,7 @@ from ..pooling import GlobalAttentionPooling1D
 from ..pooling import GlobalAveragePooling1D
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
-def test_global_attention_pooling_1d(graph):
+def test_global_attention_pooling_1d():
     width, channel = 10, 4
     units, heads = 3, 5
     att_pool = GlobalAttentionPooling1D(units=units, heads=heads)
@@ -27,7 +20,7 @@ def test_global_attention_pooling_1d(graph):
     assert len(att_pool.losses) == 0
 
 
-def test_global_attention_pooling_1d_reuse(graph):
+def test_global_attention_pooling_1d_reuse():
     channel, units, heads = 3, 4, 5
     att_pool = GlobalAttentionPooling1D(units=units, heads=heads, reg_coeff=1.0)
     many_inputs = [
@@ -42,7 +35,7 @@ def test_global_attention_pooling_1d_reuse(graph):
     assert all(loss.shape.as_list() == [] for loss in losses)
 
 
-def test_global_attention_pooling_1d_invalid_input_rank(graph):
+def test_global_attention_pooling_1d_invalid_input_rank():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     rank2_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 3])
     with pytest.raises(ValueError):
@@ -53,7 +46,7 @@ def test_global_attention_pooling_1d_invalid_input_rank(graph):
         att_pool(rank4_inputs)
 
 
-def test_global_attention_pooling_1d_value(graph):
+def test_global_attention_pooling_1d_value(sess):
     batch_size, maxlen = 3, 10
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     inputs = tf.random_normal(shape=[batch_size, maxlen, 10])
@@ -65,12 +58,9 @@ def test_global_attention_pooling_1d_value(graph):
     )
     attended_vec = att_pool(inputs, seqlen=seqlen)
 
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
-        inputs_val, seqlen_val, attended_vec_val = sess.run(
-            [inputs, seqlen, attended_vec])
+    sess.run(tf.global_variables_initializer())
+    inputs_val, seqlen_val, attended_vec_val = sess.run(
+        [inputs, seqlen, attended_vec])
 
     # since attend_vec is a weighted average of inputs
     for row, length, vec in zip(inputs_val, seqlen_val, attended_vec_val):
@@ -79,7 +69,7 @@ def test_global_attention_pooling_1d_value(graph):
         assert np.logical_and(min_val < vec, vec < max_val).all()
 
 
-def test_sequential_attention(graph):
+def test_sequential_attention():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     seq = Sequential([att_pool])
     inputs = tf.random_normal(shape=[1, 3, 10])
@@ -92,7 +82,7 @@ def test_sequential_attention(graph):
     seq(inputs, seqlen=seqlen)
 
 
-def test_average_pooling_mask_value(graph):
+def test_average_pooling_mask_value(sess):
     pool = GlobalAveragePooling1D()
     inputs = tf.placeholder(tf.float32, [None, 5, 1])
     seqlen = tf.placeholder(tf.int32, [None])
@@ -102,23 +92,21 @@ def test_average_pooling_mask_value(graph):
         [[0], [1], [2], [3], [4]],
         [[2], [3], [4], [5], [6]],
     ], dtype=np.float32)
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
-        outputs_val = sess.run(
-            outputs,
-            feed_dict={
-                inputs: inputs_val,
-                seqlen: [2, 4],
-            },
-        )
+
+    sess.run(tf.variables_initializer(var_list=pool.variables))
+    outputs_val = sess.run(
+        outputs,
+        feed_dict={
+            inputs: inputs_val,
+            seqlen: [2, 4],
+        },
+    )
 
     expected_outputs_val = np.array([[0.5], [3.5]], dtype=np.float32)
     np.testing.assert_array_almost_equal(outputs_val, expected_outputs_val)
 
 
-def test_given_mask(graph):
+def test_given_mask():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     pool = GlobalAveragePooling1D()
     inputs = tf.placeholder(tf.float32, [None, 5, 1])

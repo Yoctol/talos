@@ -6,14 +6,7 @@ import tensorflow as tf
 from ..conv1d_transpose import Conv1DTranspose
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
-def test_output_shape_valid_padding(graph):
+def test_output_shape_valid_padding():
     width, channel = 10, 4
     filters, kernel_size = 3, 5
     dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='valid')
@@ -26,7 +19,7 @@ def test_output_shape_valid_padding(graph):
     assert config['kernel_size'] == (kernel_size, )
 
 
-def test_output_shape_same_padding(graph):
+def test_output_shape_same_padding():
     width, channel = 10, 4
     filters, kernel_size = 3, 5
     dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='same')
@@ -39,7 +32,7 @@ def test_output_shape_same_padding(graph):
     assert config['kernel_size'] == (kernel_size, )
 
 
-def test_output_value_valid_padding(graph):
+def test_output_value_valid_padding(sess):
     width, channel = 3, 1
     dconv1d = Conv1DTranspose(
         filters=1,
@@ -50,14 +43,11 @@ def test_output_value_valid_padding(graph):
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
     outputs = dconv1d(inputs)
 
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
-        outputs_val = sess.run(
-            outputs,
-            feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
-        )
+    sess.run(tf.variables_initializer(var_list=dconv1d.variables))
+    outputs_val = sess.run(
+        outputs,
+        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+    )
 
     expected_outputs_val = np.sum([
         np.array([[[1.], [1.], [1.], [0.], [0.]]]),
@@ -70,7 +60,7 @@ def test_output_value_valid_padding(graph):
     )
 
 
-def test_output_value_same_padding(graph):
+def test_output_value_same_padding(sess):
     width, channel = 3, 1
     dconv1d = Conv1DTranspose(
         filters=1,
@@ -81,14 +71,11 @@ def test_output_value_same_padding(graph):
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
     outputs = dconv1d(inputs)
 
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
-        outputs_val = sess.run(
-            outputs,
-            feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
-        )
+    sess.run(tf.variables_initializer(var_list=dconv1d.variables))
+    outputs_val = sess.run(
+        outputs,
+        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+    )
 
     expected_outputs_val = np.sum([
         np.array([[[1.], [1.], [0.]]]),
@@ -101,13 +88,13 @@ def test_output_value_same_padding(graph):
     )
 
 
-def test_invalid_input_rank(graph):
+def test_invalid_input_rank():
     rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5, 1])
     with pytest.raises(ValueError):
         Conv1DTranspose(filters=10, kernel_size=5)(rank4_inputs)
 
 
-def test_invalid_input_shape(graph):
+def test_invalid_input_shape():
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5])
     different_shape_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 6])
     dconv1d = Conv1DTranspose(filters=10, kernel_size=5)

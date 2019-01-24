@@ -13,11 +13,19 @@ exclude_lines =
     raise AssertionError
     raise NotImplementedError
 
+    # Don't complain if tests don't hit abstract class
+    abc.
+    ABC
+    @abstractmethod
+
     # Don't complain if non-runnable code isn't run:
     if 0:
     if __name__ == .__main__.:
 
 ignore_errors = True
+omit =
+    *__init__.py
+    *test*
 
 [html]
 directory = coverage_html_report
