@@ -12,11 +12,11 @@ lint:
 
 .PHONY: test
 test:
-	pytest --cov=talos/ --cov-fail-under=90
+	pytest --cov=talos/ --cov-fail-under=80
 
 .PHONY: test-report
 test-report:
-	pytest -W ignore --cov=talos/ --cov-report term-missing
+	pytest -W ignore --cov=talos/ --cov-report term-missing --cov-fail-under=80
 
 .PHONY: all
 all: test lint
