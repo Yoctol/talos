@@ -32,7 +32,7 @@ def test_output_shape_same_padding():
     assert config['kernel_size'] == (kernel_size, )
 
 
-def test_output_value_valid_padding():
+def test_output_value_valid_padding(sess):
     width, channel = 3, 1
     dconv1d = Conv1DTranspose(
         filters=1,
@@ -43,12 +43,11 @@ def test_output_value_valid_padding():
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
     outputs = dconv1d(inputs)
 
-    with tf.Session() as sess:
-        sess.run(tf.variables_initializer(var_list=dconv1d.variables))
-        outputs_val = sess.run(
-            outputs,
-            feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
-        )
+    sess.run(tf.variables_initializer(var_list=dconv1d.variables))
+    outputs_val = sess.run(
+        outputs,
+        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+    )
 
     expected_outputs_val = np.sum([
         np.array([[[1.], [1.], [1.], [0.], [0.]]]),
@@ -61,7 +60,7 @@ def test_output_value_valid_padding():
     )
 
 
-def test_output_value_same_padding():
+def test_output_value_same_padding(sess):
     width, channel = 3, 1
     dconv1d = Conv1DTranspose(
         filters=1,
@@ -72,12 +71,11 @@ def test_output_value_same_padding():
     inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
     outputs = dconv1d(inputs)
 
-    with tf.Session() as sess:
-        sess.run(tf.variables_initializer(var_list=dconv1d.variables))
-        outputs_val = sess.run(
-            outputs,
-            feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
-        )
+    sess.run(tf.variables_initializer(var_list=dconv1d.variables))
+    outputs_val = sess.run(
+        outputs,
+        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+    )
 
     expected_outputs_val = np.sum([
         np.array([[[1.], [1.], [0.]]]),

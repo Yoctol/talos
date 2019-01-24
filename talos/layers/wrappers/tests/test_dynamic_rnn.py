@@ -14,7 +14,7 @@ def test_dynamic_rnn_shape():
     assert outputs.shape.as_list() == [None, 5]
 
 
-def test_dynamic_rnn_value():
+def test_dynamic_rnn_value(sess):
     cell = tf.keras.layers.LSTMCell(5)
     static_layer = tf.keras.layers.RNN(cell, return_sequences=True)
     dynamic_layer = DynamicRecurrent(cell)
@@ -31,15 +31,15 @@ def test_dynamic_rnn_value():
 
     n_samples = 10
     seqlen_batch = np.random.randint(low=2, high=maxlen + 1, size=[n_samples])
-    with tf.Session() as sess:
-        sess.run(tf.variables_initializer(var_list=cell.variables))
-        static_batch, dynamic_batch = sess.run(
-            [static_outputs, dynamic_outputs],
-            feed_dict={
-                inputs: np.random.rand(n_samples, maxlen, 3),
-                seqlen: seqlen_batch,
-            },
-        )
+
+    sess.run(tf.variables_initializer(var_list=cell.variables))
+    static_batch, dynamic_batch = sess.run(
+        [static_outputs, dynamic_outputs],
+        feed_dict={
+            inputs: np.random.rand(n_samples, maxlen, 3),
+            seqlen: seqlen_batch,
+        },
+    )
 
     np.testing.assert_array_almost_equal(static_batch, dynamic_batch)
 

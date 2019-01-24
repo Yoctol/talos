@@ -3,7 +3,7 @@ import tensorflow as tf
 from ..ops import sequence_reduce_mean
 
 
-def test_sequence_reduce_mean():
+def test_sequence_reduce_mean(sess):
     x = tf.constant([
         [2, 3, 4, 5],
         [0, 2, 4, 6],
@@ -17,5 +17,4 @@ def test_sequence_reduce_mean():
         2 + (0 + 2) / 2 + (0 + 1 + 2) / 3 + (5 + 4 + 3 + 2) / 4
     ) / 4
 
-    with tf.Session() as sess:
-        assert sess.run(mean_x) == expected_mean_x
+    assert sess.run(mean_x) == expected_mean_x
