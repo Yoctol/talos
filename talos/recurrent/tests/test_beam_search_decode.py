@@ -6,13 +6,6 @@ import tensorflow as tf
 from ..beam_search_decode import beam_search_decode
 
 
-@pytest.yield_fixture(scope="function")
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 @pytest.fixture(scope='function')
 def cell():
     return tf.keras.layers.GRUCell(units=5)

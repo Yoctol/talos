@@ -5,13 +5,6 @@ import tensorflow as tf
 from ..ops import sequence_reduce_mean
 
 
-@pytest.yield_fixture(scope="function")
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 def test_sequence_reduce_mean(graph):
     x = tf.constant([
         [2, 3, 4, 5],

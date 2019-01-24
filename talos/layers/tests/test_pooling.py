@@ -8,13 +8,6 @@ from ..pooling import GlobalAttentionPooling1D
 from ..pooling import GlobalAveragePooling1D
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 def test_global_attention_pooling_1d(graph):
     width, channel = 10, 4
     units, heads = 3, 5

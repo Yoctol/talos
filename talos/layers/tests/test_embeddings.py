@@ -6,13 +6,6 @@ import tensorflow as tf
 from ..embeddings import Embedding
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 def test_mask_shape(graph):
     inputs = tf.placeholder(tf.int32, shape=[None, 3])
     embed_layer = Embedding(vocab_size=3, embeddings_dim=5, mask_index=1)

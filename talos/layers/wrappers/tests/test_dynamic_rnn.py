@@ -1,16 +1,7 @@
-import pytest
-
 import numpy as np
 import tensorflow as tf
 
 from ..dynamic_rnn import DynamicRecurrent
-
-
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
 
 
 def test_dynamic_rnn_shape(graph):

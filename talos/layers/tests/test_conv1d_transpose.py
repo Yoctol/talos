@@ -6,13 +6,6 @@ import tensorflow as tf
 from ..conv1d_transpose import Conv1DTranspose
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 def test_output_shape_valid_padding(graph):
     width, channel = 10, 4
     filters, kernel_size = 3, 5

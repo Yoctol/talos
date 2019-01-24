@@ -5,13 +5,6 @@ import tensorflow as tf
 from ..sequential import Sequential
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 def test_build_sublayers_when_first_called(graph):
     sequential = Sequential([
         tf.keras.layers.Embedding(20, 10),

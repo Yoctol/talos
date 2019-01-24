@@ -6,13 +6,6 @@ import tensorflow as tf
 from ..layer_norm import LayerNormalization
 
 
-@pytest.yield_fixture(scope='function')
-def graph():
-    graph = tf.Graph()
-    with graph.as_default():
-        yield graph
-
-
 @pytest.fixture
 def layer():
     return LayerNormalization()
