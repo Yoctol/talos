@@ -47,7 +47,7 @@ def test_beam_search_decode_dynamic_batch(cell, dense_layer):
 
     first_input_val = np.zeros([2] + first_input.shape.as_list()[1:], dtype=np.float32)
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=cell.variables + dense_layer.variables))
         output_logits, output_word_ids = sess.run(
             output_tensors,
             feed_dict={first_input: first_input_val},

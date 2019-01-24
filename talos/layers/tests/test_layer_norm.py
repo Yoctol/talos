@@ -21,7 +21,7 @@ def test_output_value(layer):
     outputs = layer(inputs)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=layer.variables))
         np.testing.assert_array_almost_equal(
             sess.run(outputs),
             np.array([

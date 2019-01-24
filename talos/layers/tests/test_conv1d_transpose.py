@@ -44,7 +44,7 @@ def test_output_value_valid_padding():
     outputs = dconv1d(inputs)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=dconv1d.variables))
         outputs_val = sess.run(
             outputs,
             feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
@@ -73,7 +73,7 @@ def test_output_value_same_padding():
     outputs = dconv1d(inputs)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=dconv1d.variables))
         outputs_val = sess.run(
             outputs,
             feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},

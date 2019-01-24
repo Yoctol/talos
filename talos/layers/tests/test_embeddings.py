@@ -13,7 +13,7 @@ def test_mask_shape():
     assert outputs.shape.as_list() == [None, 3, 5]
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=embed_layer.variables))
         mask_val = sess.run(
             outputs._keras_mask,
             feed_dict={inputs: [[0, 1, 2]]},
@@ -29,7 +29,7 @@ def test_construct_from_weights():
     embed_layer(inputs)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=embed_layer.variables))
         weights_val = sess.run(embed_layer.embeddings)
 
     np.testing.assert_array_almost_equal(weights, weights_val)

@@ -32,7 +32,7 @@ def test_dynamic_rnn_value():
     n_samples = 10
     seqlen_batch = np.random.randint(low=2, high=maxlen + 1, size=[n_samples])
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=cell.variables))
         static_batch, dynamic_batch = sess.run(
             [static_outputs, dynamic_outputs],
             feed_dict={

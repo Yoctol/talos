@@ -94,7 +94,7 @@ def test_average_pooling_mask_value():
         [[2], [3], [4], [5], [6]],
     ], dtype=np.float32)
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.variables_initializer(var_list=pool.variables))
         outputs_val = sess.run(
             outputs,
             feed_dict={
