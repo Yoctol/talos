@@ -70,7 +70,7 @@ def test_global_attention_pooling_1d_value():
         assert np.logical_and(min_val < vec, vec < max_val).all()
 
 
-def test_sequential_attention(graph):
+def test_sequential_attention():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     seq = Sequential([att_pool])
     inputs = tf.random_normal(shape=[1, 3, 10])
@@ -83,7 +83,7 @@ def test_sequential_attention(graph):
     seq(inputs, seqlen=seqlen)
 
 
-def test_average_pooling_mask_value(graph):
+def test_average_pooling_mask_value():
     pool = GlobalAveragePooling1D()
     inputs = tf.placeholder(tf.float32, [None, 5, 1])
     seqlen = tf.placeholder(tf.int32, [None])
@@ -93,10 +93,8 @@ def test_average_pooling_mask_value(graph):
         [[0], [1], [2], [3], [4]],
         [[2], [3], [4], [5], [6]],
     ], dtype=np.float32)
-    with tf.Session(graph=graph) as sess:
-        sess.run(tf.variables_initializer(
-            var_list=graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)),
-        )
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         outputs_val = sess.run(
             outputs,
             feed_dict={
@@ -109,7 +107,7 @@ def test_average_pooling_mask_value(graph):
     np.testing.assert_array_almost_equal(outputs_val, expected_outputs_val)
 
 
-def test_given_mask(graph):
+def test_given_mask():
     att_pool = GlobalAttentionPooling1D(units=3, heads=4)
     pool = GlobalAveragePooling1D()
     inputs = tf.placeholder(tf.float32, [None, 5, 1])
