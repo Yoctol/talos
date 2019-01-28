@@ -6,98 +6,86 @@ import tensorflow as tf
 from ..conv1d_transpose import Conv1DTranspose
 
 
-def test_output_shape_valid_padding():
-    width, channel = 10, 4
+@pytest.fixture(scope='module')
+def inputs():
+    return tf.placeholder(dtype=tf.float32, shape=[None, 3, 1])
+
+
+def test_configs():
+    dconv1d = Conv1DTranspose(filters=3, kernel_size=5, padding='valid')
+    assert {'filters': 3, 'kernel_size': (5,)}.items() <= dconv1d.get_config().items()
+
+
+@pytest.mark.parametrize('padding', ['valid', 'same'])
+def test_output_shape(inputs, padding):
+    width, channel = inputs.shape.as_list()[1:]
     filters, kernel_size = 3, 5
-    dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='valid')
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
+    dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding=padding)
     outputs = dconv1d(inputs)
 
-    assert outputs.shape.as_list() == [None, width + kernel_size - 1, filters]
-    config = dconv1d.get_config()
-    assert config['filters'] == filters
-    assert config['kernel_size'] == (kernel_size, )
+    if padding == 'valid':
+        expected_shape = [None, width + kernel_size - 1, filters]
+    elif padding == 'same':
+        expected_shape = [None, width, filters]
+    else:
+        assert False  # invalid parametrize!!!!
+
+    assert outputs.shape.as_list() \
+        == dconv1d.compute_output_shape(inputs.shape).as_list() \
+        == expected_shape
 
 
-def test_output_shape_same_padding():
-    width, channel = 10, 4
-    filters, kernel_size = 3, 5
-    dconv1d = Conv1DTranspose(filters=filters, kernel_size=kernel_size, padding='same')
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-    outputs = dconv1d(inputs)
-
-    assert outputs.shape.as_list() == [None, width, filters]
-    config = dconv1d.get_config()
-    assert config['filters'] == filters
-    assert config['kernel_size'] == (kernel_size, )
-
-
-def test_output_value_valid_padding(sess):
-    width, channel = 3, 1
+@pytest.mark.parametrize('padding', ['valid', 'same'])
+def test_output_value(inputs, padding, sess):
+    width, channel = inputs.shape.as_list()[1:]
     dconv1d = Conv1DTranspose(
         filters=1,
         kernel_size=3,
-        kernel_initializer='ones',
-        padding='valid',
+        kernel_initializer='ones',  # for manually compute output val
+        padding=padding,
     )
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
     outputs = dconv1d(inputs)
 
     sess.run(tf.variables_initializer(var_list=dconv1d.variables))
     outputs_val = sess.run(
         outputs,
-        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
+        feed_dict={inputs: np.array([1., 2., 3.]).reshape(-1, width, channel)},
     )
 
-    expected_outputs_val = np.sum([
-        np.array([[[1.], [1.], [1.], [0.], [0.]]]),
-        np.array([[[0.], [2.], [2.], [2.], [0.]]]),
-        np.array([[[0.], [0.], [3.], [3.], [3.]]]),
-    ], axis=0)
-    np.testing.assert_array_almost_equal(
-        outputs_val,
-        expected_outputs_val,
-    )
+    if padding == 'valid':
+        # for visualizing the deconv process
+        expected_val = np.sum([
+            np.array([[[1.], [1.], [1.], [0.], [0.]]]),
+            np.array([[[0.], [2.], [2.], [2.], [0.]]]),
+            np.array([[[0.], [0.], [3.], [3.], [3.]]]),
+        ], axis=0)
+    elif padding == 'same':
+        expected_val = np.sum([
+            [[[1.], [1.], [0.]]],
+            [[[2.], [2.], [2.]]],
+            [[[0.], [3.], [3.]]],
+        ], axis=0)
+    else:
+        assert False  # invalid parametrize!!!!
+
+    np.testing.assert_array_almost_equal(outputs_val, expected_val)
 
 
-def test_output_value_same_padding(sess):
-    width, channel = 3, 1
-    dconv1d = Conv1DTranspose(
-        filters=1,
-        kernel_size=3,
-        kernel_initializer='ones',
-        padding='same',
-    )
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel])
-    outputs = dconv1d(inputs)
-
-    sess.run(tf.variables_initializer(var_list=dconv1d.variables))
-    outputs_val = sess.run(
-        outputs,
-        feed_dict={inputs: np.array([[[1.], [2.], [3.]]])},
-    )
-
-    expected_outputs_val = np.sum([
-        np.array([[[1.], [1.], [0.]]]),
-        np.array([[[2.], [2.], [2.]]]),
-        np.array([[[0.], [3.], [3.]]]),
-    ], axis=0)
-    np.testing.assert_array_almost_equal(
-        outputs_val,
-        expected_outputs_val,
-    )
-
-
-def test_invalid_input_rank():
-    rank4_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5, 1])
+@pytest.mark.parametrize('invalid_inputs', [
+    tf.zeros(shape=[2, 3]),
+    tf.zeros(shape=[2, 3, 1, 1]),
+])
+def test_raise_invalid_input_rank(invalid_inputs):
+    layer = Conv1DTranspose(filters=10, kernel_size=5)
     with pytest.raises(ValueError):
-        Conv1DTranspose(filters=10, kernel_size=5)(rank4_inputs)
+        layer(invalid_inputs)
 
 
-def test_invalid_input_shape():
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 5])
-    different_shape_inputs = tf.placeholder(dtype=tf.float32, shape=[None, 10, 6])
+def test_raise_invalid_input_channel_after_built(inputs):
+    width, channel = inputs.shape.as_list()[1:]
     dconv1d = Conv1DTranspose(filters=10, kernel_size=5)
-    dconv1d(inputs)
+    dconv1d(inputs)  # build on this inputs channel
+
+    different_channel_inputs = tf.placeholder(dtype=tf.float32, shape=[None, width, channel + 1])
     with pytest.raises(ValueError):
-        dconv1d(different_shape_inputs)
+        dconv1d(different_channel_inputs)
