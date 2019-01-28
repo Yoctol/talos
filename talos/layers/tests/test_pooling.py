@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 
 import numpy as np
 import tensorflow as tf
@@ -47,7 +48,11 @@ class TestGlobalPooling1D:
 
     def test_support_masked_inputs(self, inputs, layer):
         masked_inputs = tf.keras.layers.Masking()(inputs)
-        layer(masked_inputs)
+        with patch.object(layer, 'call') as mock_layer_call:
+            layer(masked_inputs)
+
+        kwargs = mock_layer_call.call_args[1]
+        assert isinstance(kwargs['mask'], tf.Tensor)  # has passed to layer
 
 
 class TestGlobalAttentionPooling1D:
@@ -120,4 +125,8 @@ class TestGlobalAttentionPooling1D:
 
     def test_support_masked_inputs(self, inputs, layer):
         masked_inputs = tf.keras.layers.Masking()(inputs)
-        layer(masked_inputs)
+        with patch.object(layer, 'call') as mock_layer_call:
+            layer(masked_inputs)
+
+        kwargs = mock_layer_call.call_args[1]
+        assert isinstance(kwargs['mask'], tf.Tensor)  # has passed to layer
