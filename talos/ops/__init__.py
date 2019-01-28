@@ -1,1 +1,1 @@
-from .ops import sequence_reduce_mean
+from .ops import masked_reduce_mean, sequence_reduce_mean
