@@ -14,15 +14,16 @@ class TestGlobalPooling1D:
         return tf.placeholder(tf.float32, [None, 5, 1])
 
     @pytest.fixture(scope='class')
-    def seqlen(self):
-        return tf.placeholder(tf.int32, [None])
+    def mask(self, inputs):
+        maxlen = inputs.shape[1].value
+        return tf.placeholder(tf.bool, [None, maxlen])
 
     @pytest.fixture(scope='class')
     def layer(self):
         return GlobalAveragePooling1D()
 
-    def test_mask_value(self, sess, inputs, seqlen, layer):
-        outputs = layer(inputs, seqlen=seqlen)
+    def test_mask_value(self, sess, inputs, mask, layer):
+        outputs = layer(inputs, mask=mask)
 
         inputs_val = np.array([
             [0., 1., 2., 3., 4.],
@@ -34,11 +35,14 @@ class TestGlobalPooling1D:
             outputs,
             feed_dict={
                 inputs: inputs_val,
-                seqlen: [2, 4],
+                mask: [
+                    [True, True, False, True, False],
+                    [False, False, False, False, False],
+                ],
             },
         )
 
-        expected_outputs_val = np.array([(0. + 1.) / 2., (2. + 3. + 4. + 5.) / 4.]).reshape(-1, 1)
+        expected_outputs_val = np.array([(0. + 1. + 3.) / 3., 0.]).reshape(-1, 1)
         np.testing.assert_array_almost_equal(outputs_val, expected_outputs_val)
 
     def test_support_masked_inputs(self, inputs, layer):
@@ -53,8 +57,9 @@ class TestGlobalAttentionPooling1D:
         return tf.placeholder(dtype=tf.float32, shape=[None, 4, 3])
 
     @pytest.fixture(scope='class')
-    def seqlen(self):
-        return tf.placeholder(dtype=tf.int32, shape=[None])
+    def mask(self, inputs):
+        maxlen = inputs.shape[1].value
+        return tf.placeholder(tf.bool, [None, maxlen])
 
     @pytest.fixture(scope='class')
     def layer(self):
@@ -91,26 +96,27 @@ class TestGlobalAttentionPooling1D:
         with pytest.raises(ValueError):
             layer(invalid_inputs)
 
-    def test_output_value(self, sess, inputs, seqlen):
+    def test_output_value(self, sess, inputs, mask):
         maxlen, channel = inputs.shape.as_list()[1:]
         # zero init to isolate the grad through weights calculation.
         att_pool = GlobalAttentionPooling1D(units=3, heads=4, kernel_initializer='zeros')
-        attended_vec = att_pool(inputs, seqlen=seqlen)
+        attended_vec = att_pool(inputs, mask=mask)
         grads = tf.gradients(attended_vec, inputs)[0]  # same shape as inputs
 
-        seqlen_batch = np.random.randint(2, maxlen + 1, size=[5])
+        mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
         sess.run(tf.variables_initializer(var_list=att_pool.variables))
         grad_batch = sess.run(
             grads,
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in seqlen_batch],
-                seqlen: seqlen_batch,
+                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
+                mask: mask_batch,
             },
         )
-        for seqlen_sample, grad_sample in zip(seqlen_batch, grad_batch):
-            attended_section = grad_sample[:seqlen_sample]
+        for mask_sample, grad_sample in zip(mask_batch, grad_batch):
+            attended_section = grad_sample[mask_sample]
+            dropped_section = grad_sample[np.logical_not(mask_sample)]
             assert np.logical_and(0. < attended_section, attended_section < att_pool.heads).all()
-            assert (grad_sample[seqlen_sample:] == 0.).all()
+            assert (dropped_section == 0.).all()
 
     def test_support_masked_inputs(self, inputs, layer):
         masked_inputs = tf.keras.layers.Masking()(inputs)

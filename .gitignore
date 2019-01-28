@@ -94,3 +94,6 @@ ENV/
 
 dump.rdb
 .vscode/
+
+# for local testing
+tmp
