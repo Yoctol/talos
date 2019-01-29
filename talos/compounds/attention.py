@@ -17,11 +17,35 @@ class ScaledDotSelfAttention(Model):
         self.heads = heads
         self.use_bias = use_bias
 
-        self.query_layer = tf.keras.layers.Dense(units=units * heads)
-        self.key_layer = tf.keras.layers.Dense(units=units * heads)
-        self.value_layer = tf.keras.layers.Dense(units=units * heads)
+        self.supports_masking = True
+
+        self.query_layer = tf.keras.layers.Dense(
+            name='query_dense',
+            units=units * heads,
+            use_bias=use_bias,
+        )
+        self.key_layer = tf.keras.layers.Dense(
+            name='key_dense',
+            units=units * heads,
+            use_bias=use_bias,
+        )
+        self.value_layer = tf.keras.layers.Dense(
+            name='value_dense',
+            units=units * heads,
+            use_bias=use_bias,
+        )
+
+        self._input_spec = tf.keras.layers.InputSpec(ndim=3)
+
+    @property  # override property
+    def input_spec(self):
+        return self._input_spec
 
     def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
+        if mask is not None:
+            mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+            inputs *= mask[:, :, tf.newaxis]  # shape (N, T, d_in)
+
         query = self.query_layer(inputs)  # shape (N, T', hU)
         key = self.key_layer(inputs)  # shape (N, T, hU)
         value = self.value_layer(inputs)  # shape (N, T, hU)
@@ -36,6 +60,12 @@ class ScaledDotSelfAttention(Model):
         logits = tf.matmul(
             query, key, transpose_a=True) / np.sqrt(self.units)  # shape (N, h, T', T)
         weights = tf.nn.softmax(logits)  # shape (N, h, T', T)
+
+        if mask is not None:
+            # Renormalize for lower seqlen
+            weights *= mask[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
+            weights /= (tf.reduce_sum(weights, axis=3, keepdims=True) + tf.keras.backend.epsilon())
+
         # (N, h, T', T) * (N, h, T, U) -> (N, h, T', U)
         outputs = tf.matmul(weights, value, transpose_b=True)  # shape (N, h, T', U)
 
@@ -48,3 +78,7 @@ class ScaledDotSelfAttention(Model):
         output_shape = input_shape.as_list()
         output_shape[2] = self.heads * self.units
         return tf.TensorShape(output_shape)
+
+    def compute_mask(self, inputs, mask):
+        # use same mask
+        return mask
