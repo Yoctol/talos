@@ -1,5 +1,6 @@
 from tensorflow.python.keras.engine.sequential import Sequential as keras_Sequential
 from tensorflow.python.keras.engine import base_layer
+from tensorflow.python.keras.utils import generic_utils
 from tensorflow.python.training.checkpointable import base as checkpointable
 
 
@@ -36,3 +37,24 @@ class Sequential(keras_Sequential):
         self._layers.append(layer)
         if self._layers:
             self._track_layers(self._layers)
+
+    def _set_mask_metadata(self, inputs, outputs, previous_mask):
+        output_list = generic_utils.to_list(outputs)
+        mask_already_computed = all(hasattr(x, '_keras_mask') for x in output_list)
+        if hasattr(self, 'compute_mask') and not mask_already_computed:
+            output_mask = self.compute_mask(inputs, previous_mask)
+        else:
+            output_mask = [x._keras_mask for x in output_list]
+        if isinstance(outputs, (list, tuple)):
+            if output_mask is None:
+                output_mask = [None for _ in outputs]
+            for x, m in zip(outputs, output_mask):
+                try:
+                    x._keras_mask = m  # pylint: disable=protected-access
+                except AttributeError:
+                    pass  # C type such as dict. Masking not supported in this case.
+        else:
+            try:
+                outputs._keras_mask = output_mask  # pylint: disable=protected-access
+            except AttributeError:
+                pass  # C type such as dict. Masking not supported in this case.
