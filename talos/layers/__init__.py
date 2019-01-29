@@ -150,6 +150,8 @@ from tensorflow.python.keras.layers.serialization import serialize
 from .conv1d_transpose import Conv1DTranspose
 from .embeddings import Embedding
 
+from .layer_norm import LayerNormalization
+
 from .pooling import GlobalAveragePooling1D
 from .pooling import GlobalAttentionPooling1D
 from .pooling import GlobalAvgPool1D
