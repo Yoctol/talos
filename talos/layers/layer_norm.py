@@ -11,11 +11,12 @@ class LayerNormalization(tf.keras.layers.Layer):
             axis: int = -1,
             **kwargs,
         ):
+        super().__init__(**kwargs)
         self.center = center
         self.scale = scale
         self.trainable = trainable
         self.axis = axis
-        super().__init__(**kwargs)
+        self.supports_masking = True
 
     def build(self, input_shape):
         # Create a trainable weight variable for this layer.
