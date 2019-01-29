@@ -32,7 +32,7 @@ class Conv1DTranspose(Conv1D):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
-            **kwargs
+            **kwargs,
         ):
         super().__init__(
             filters=filters,
