@@ -8,8 +8,8 @@ from tensorflow.python.keras.engine.training import Model as keras_Model
 class Model(keras_Model, abc.ABC):
 
     # HACK override: remove pre-call part!!
-    # https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/keras/engine/network.py#L729-L814
-    # just copy/paste the source code and remove L767-L802
+    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/network.py#L729-L814
+    # just copy/paste the source code and remove L767-L802, L806-L813
 
     @base_layer.default
     def build(self, input_shape):
@@ -38,16 +38,8 @@ class Model(keras_Model, abc.ABC):
         # source code L804
         if self._layers:
             self._track_layers(self._layers)
-        if self.layers:
-            for layer in self.layers:
-                if not layer.built:
-                    raise ValueError(
-                        f'Layer: {layer} was not built in your model. Calling '
-                        '`build` manually on a subclassed model is only '
-                        'allowed for models with a static topology. '
-                        'In this case, you can build your model by '
-                        'calling it on real tensor data.',
-                    )
+
+        # remove L806-L813
 
         self.built = True
 
