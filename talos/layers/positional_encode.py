@@ -27,7 +27,7 @@ class PositionalEncode(tf.keras.layers.Layer):
         dim_range = np.arange(dim)  # shape [D]
         wave_length = np.power(self.base, 2. * dim_range / dim)  # shape [D]
 
-        offset = -np.pi * ((dim_range % 2) + 1)
+        offset = (-np.pi / 2.) * ((dim_range + 1) % 2)
         # [-pi / 2, 0, ...] for convert sin to cos on even dim, shape [D]
 
         theta = position_range[:, np.newaxis] / wave_length[np.newaxis, :] + offset[np.newaxis, :]
