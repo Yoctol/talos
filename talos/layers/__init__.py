@@ -157,4 +157,6 @@ from .pooling import GlobalAttentionPooling1D
 from .pooling import GlobalAvgPool1D
 from .pooling import GlobalAttPool1D
 
+from .positional_encode import PositionalEncode
+
 import talos.layers.wrappers
