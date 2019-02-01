@@ -7,17 +7,6 @@ from ..transformer_block import TransformerBlock
 
 
 @pytest.fixture(scope='module')
-def inputs():
-    return tf.placeholder(tf.float32, [None, 4, 6])
-
-
-@pytest.fixture(scope='class')
-def mask(inputs):
-    maxlen = inputs.shape[1].value
-    return tf.placeholder(tf.bool, [None, maxlen])
-
-
-@pytest.fixture(scope='module')
 def layer():
     return TransformerBlock(units=3, heads=2)
 
@@ -50,5 +39,7 @@ def test_mask_gradients(inputs, mask, layer, sess):
         },
     )
     for mask_sample, grad_sample in zip(mask_batch, grad_batch):
+        attended_section = grad_sample[mask_sample]
         dropped_section = grad_sample[np.logical_not(mask_sample)]
+        assert (attended_section != 0.).all()
         assert (dropped_section == 0.).all()

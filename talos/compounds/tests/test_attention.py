@@ -3,18 +3,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from talos.networks import Sequential
 from ..attention import ScaledDotSelfAttention
-
-
-@pytest.fixture(scope='module')
-def inputs():
-    return tf.placeholder(dtype=tf.float32, shape=[None, 4, 3])
-
-
-@pytest.fixture(scope='module')
-def mask():
-    return tf.placeholder(dtype=tf.bool, shape=[None, 4])
 
 
 @pytest.fixture
@@ -23,9 +12,12 @@ def layer():
 
 
 def test_output_shape(inputs, layer):
+    batch_size, maxlen = inputs.shape.as_list()[:2]
+    output_dim = layer.output_dim
     outputs = layer(inputs)
-    assert outputs.shape.as_list() == [None, 4, 5]
-    assert layer.compute_output_shape(inputs.shape).as_list() == [None, 4, 5]
+    expected_shape = [batch_size, maxlen, output_dim]
+    assert outputs.shape.as_list() == expected_shape
+    assert layer.compute_output_shape(inputs.shape).as_list() == expected_shape
 
 
 @pytest.mark.parametrize('invalid_inputs', [
@@ -47,19 +39,6 @@ def test_support_masked_inputs(mocker, inputs, layer):
     assert outputs._keras_mask is not None
 
 
-def test_support_masked_inputs_through_sequential(mocker, inputs, layer):
-    seq = Sequential([
-        tf.keras.layers.Masking(),
-        layer,
-    ])
-
-    # since keras use func inspect, directly mock layer.call will cause side effect
-    mock_cast = mocker.spy(tf, 'cast')  # would call if mask is passed
-    outputs = seq(inputs)
-    assert mock_cast.called
-    assert outputs._keras_mask is not None
-
-
 def test_mask_gradients(inputs, mask, layer, sess):
     maxlen, channel = inputs.shape.as_list()[1:]
 
@@ -76,5 +55,7 @@ def test_mask_gradients(inputs, mask, layer, sess):
         },
     )
     for mask_sample, grad_sample in zip(mask_batch, grad_batch):
+        attended_section = grad_sample[mask_sample]
         dropped_section = grad_sample[np.logical_not(mask_sample)]
+        assert (attended_section != 0.).all()
         assert (dropped_section == 0.).all()
