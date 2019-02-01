@@ -49,26 +49,27 @@ class Model(keras_Model, abc.ABC):
         pass
 
     # HACK override: fix output._keras_mask setting
+    # don't use sublayer outputs keras_mask if implement compute_mask method.
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
-    # modify L855
     def _set_mask_metadata(self, inputs, outputs, previous_mask):
         output_list = generic_utils.to_list(outputs)
-        mask_already_computed = all(hasattr(x, '_keras_mask') for x in output_list)
-        if hasattr(self, 'compute_mask') and not mask_already_computed:
+        # explicitly call compute_mask!!!!!
+        if hasattr(self, 'compute_mask'):
             output_mask = self.compute_mask(inputs, previous_mask)
         else:
             # fix this line of source code
-            output_mask = [x._keras_mask for x in output_list]
-        if isinstance(outputs, (list, tuple)):
-            if output_mask is None:
-                output_mask = [None for _ in outputs]
-            for x, m in zip(outputs, output_mask):
-                try:
-                    x._keras_mask = m  # pylint: disable=protected-access
-                except AttributeError:
-                    pass  # C type such as dict. Masking not supported in this case.
+            output_mask = [
+                x._keras_mask if hasattr(x, '_keras_mask') else None
+                for x in output_list
+            ]
+
+        if output_mask is None:
+            output_mask_list = [None for _ in output_list]
         else:
+            output_mask_list = generic_utils.to_list(output_mask)
+
+        for x, m in zip(output_list, output_mask_list):
             try:
-                outputs._keras_mask = output_mask  # pylint: disable=protected-access
+                x._keras_mask = m
             except AttributeError:
-                pass  # C type such as dict. Masking not supported in this case.
+                pass
