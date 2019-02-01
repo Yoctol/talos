@@ -19,13 +19,13 @@ def mask():
 
 @pytest.fixture
 def layer():
-    return ScaledDotSelfAttention(units=6, heads=2)
+    return ScaledDotSelfAttention(units=3, heads=2, output_dim=5)
 
 
 def test_output_shape(inputs, layer):
     outputs = layer(inputs)
-    assert outputs.shape.as_list() == [None, 4, 6 * 2]
-    assert layer.compute_output_shape(inputs.shape).as_list() == [None, 4, 6 * 2]
+    assert outputs.shape.as_list() == [None, 4, 5]
+    assert layer.compute_output_shape(inputs.shape).as_list() == [None, 4, 5]
 
 
 @pytest.mark.parametrize('invalid_inputs', [

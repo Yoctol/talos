@@ -13,28 +13,35 @@ class TransformerBlock(Model):
         """
         super().__init__()
         self.supports_masking = True
-        self.att = ScaledDotSelfAttention(units=units, heads=heads)
 
-        self.input_dim = self.output_dim = units * heads
+        self.units = units
+        self.heads = heads
+
         if hidden_units is None:
-            hidden_units = self.input_dim * 4  # ratio in paper
+            hidden_units = units * heads * 4  # ratio in paper
         self.hidden_dense = tf.keras.layers.Dense(
             units=hidden_units,
             activation='relu',
             use_bias=True,
         )
-        self.output_dense = tf.keras.layers.Dense(
-            units=units * heads,
-            use_bias=True,
-        )
         self.ln_att = LayerNormalization()
         self.ln_ff = LayerNormalization()
-
-        self._input_spec = tf.keras.layers.InputSpec(ndim=3, axes={2: self.input_dim})
+        self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property
     def input_spec(self):
         return self._input_spec
+
+    def build(self, input_shape):
+        output_dim = input_shape[-1].value  # since the res-add-connection
+        self.att = ScaledDotSelfAttention(
+            units=self.units, heads=self.heads, output_dim=output_dim)
+        self.output_dense = tf.keras.layers.Dense(
+            units=output_dim,
+            use_bias=True,
+        )
+        self._input_spec.axes = {2: output_dim}  # since the res-add-connection
+        super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
         att_vec = self.att(self.ln_att(inputs), mask=mask)

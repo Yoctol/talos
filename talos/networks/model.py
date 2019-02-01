@@ -3,6 +3,7 @@ import abc
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras.engine import base_layer
 from tensorflow.python.keras.engine.training import Model as keras_Model
+from tensorflow.python.keras.utils import generic_utils
 
 
 class Model(keras_Model, abc.ABC):
@@ -46,3 +47,28 @@ class Model(keras_Model, abc.ABC):
     @abc.abstractmethod
     def call(self, inputs, training=None, mask=None):
         pass
+
+    # HACK override: fix output._keras_mask setting
+    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
+    # modify L855
+    def _set_mask_metadata(self, inputs, outputs, previous_mask):
+        output_list = generic_utils.to_list(outputs)
+        mask_already_computed = all(hasattr(x, '_keras_mask') for x in output_list)
+        if hasattr(self, 'compute_mask') and not mask_already_computed:
+            output_mask = self.compute_mask(inputs, previous_mask)
+        else:
+            # fix this line of source code
+            output_mask = [x._keras_mask for x in output_list]
+        if isinstance(outputs, (list, tuple)):
+            if output_mask is None:
+                output_mask = [None for _ in outputs]
+            for x, m in zip(outputs, output_mask):
+                try:
+                    x._keras_mask = m  # pylint: disable=protected-access
+                except AttributeError:
+                    pass  # C type such as dict. Masking not supported in this case.
+        else:
+            try:
+                outputs._keras_mask = output_mask  # pylint: disable=protected-access
+            except AttributeError:
+                pass  # C type such as dict. Masking not supported in this case.
