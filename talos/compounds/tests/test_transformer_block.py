@@ -16,9 +16,7 @@ def test_output_shape(inputs, layer):
     assert outputs.shape.as_list() == inputs.shape.as_list()
 
 
-def test_support_masked_inputs(inputs, layer):
-    masked_inputs = tf.keras.layers.Masking()(inputs)
-
+def test_masked_inputs_propagate(masked_inputs, layer):
     outputs = layer(masked_inputs)
     assert outputs._keras_mask is not None
 
