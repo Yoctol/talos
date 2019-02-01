@@ -38,12 +38,16 @@ class Sequential(keras_Sequential):
         if self._layers:
             self._track_layers(self._layers)
 
+    # HACK override: fix output._keras_mask setting
+    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
+    # modify L855
     def _set_mask_metadata(self, inputs, outputs, previous_mask):
         output_list = generic_utils.to_list(outputs)
         mask_already_computed = all(hasattr(x, '_keras_mask') for x in output_list)
         if hasattr(self, 'compute_mask') and not mask_already_computed:
             output_mask = self.compute_mask(inputs, previous_mask)
         else:
+            # fix this line of source code
             output_mask = [x._keras_mask for x in output_list]
         if isinstance(outputs, (list, tuple)):
             if output_mask is None:
