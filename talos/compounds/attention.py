@@ -9,32 +9,32 @@ class ScaledDotSelfAttention(Model):
     def __init__(
             self,
             units: int,
+            output_dim: int,
             heads: int = 1,
+            activation: str = None,
             use_bias: bool = False,
         ):
         super().__init__()
         self.units = units
         self.heads = heads
-        self.use_bias = use_bias
+        self.output_dim = output_dim
 
         self.supports_masking = True
 
-        self.query_layer = tf.keras.layers.Dense(
-            name='query_dense',
-            units=units * heads,
+        self.query_layer, self.key_layer, self.value_layer = [
+            tf.keras.layers.Dense(
+                name=name,
+                units=units * heads,
+                activation=activation,
+                use_bias=use_bias,
+            )
+            for name in ('query_dense', 'key_dense', 'value_dense')
+        ]
+        self.output_layer = tf.keras.layers.Dense(
+            name='output_dense',
+            units=output_dim,
             use_bias=use_bias,
-        )
-        self.key_layer = tf.keras.layers.Dense(
-            name='key_dense',
-            units=units * heads,
-            use_bias=use_bias,
-        )
-        self.value_layer = tf.keras.layers.Dense(
-            name='value_dense',
-            units=units * heads,
-            use_bias=use_bias,
-        )
-
+        )  # just for parametrization
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property  # override property
@@ -67,16 +67,17 @@ class ScaledDotSelfAttention(Model):
             weights /= (tf.reduce_sum(weights, axis=3, keepdims=True) + tf.keras.backend.epsilon())
 
         # (N, h, T', T) * (N, h, T, U) -> (N, h, T', U)
-        outputs = tf.matmul(weights, value, transpose_b=True)  # shape (N, h, T', U)
+        attended_vec = tf.matmul(weights, value, transpose_b=True)  # shape (N, h, T', U)
 
-        outputs = tf.transpose(outputs, perm=[0, 2, 1, 3])  # shape (N, T', h, U)
-        outputs = tf.reshape(
-            outputs, shape=[-1, width, self.heads * self.units])  # shape (N, T', hU)
+        attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1, 3])  # shape (N, T', h, U)
+        attended_vec = tf.reshape(
+            attended_vec, shape=[-1, width, self.heads * self.units])  # shape (N, T', hU)
+        outputs = self.output_layer(attended_vec)
         return outputs
 
     def compute_output_shape(self, input_shape):
         output_shape = input_shape.as_list()
-        output_shape[2] = self.heads * self.units
+        output_shape[2] = self.output_dim
         return tf.TensorShape(output_shape)
 
     def compute_mask(self, inputs, mask):
