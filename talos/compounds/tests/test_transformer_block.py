@@ -18,7 +18,7 @@ def test_output_shape(inputs, layer):
 
 def test_masked_inputs_propagate(masked_inputs, layer):
     outputs = layer(masked_inputs)
-    assert outputs._keras_mask is not None
+    assert outputs._keras_mask is masked_inputs._keras_mask
 
 
 def test_mask_gradients(inputs, mask, layer, sess):

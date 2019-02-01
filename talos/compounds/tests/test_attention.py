@@ -31,10 +31,11 @@ def test_raise_invalid_input_rank(invalid_inputs, layer):
 
 def test_masked_inputs_propagate(mocker, masked_inputs, layer):
     # since keras use func inspect, directly mock layer.call will cause side effect
+    assert isinstance(masked_inputs._keras_mask, tf.Tensor)
     mock_cast = mocker.spy(tf, 'cast')  # would call if mask is passed
     outputs = layer(masked_inputs)
     assert mock_cast.called
-    assert outputs._keras_mask is not None
+    assert outputs._keras_mask is masked_inputs._keras_mask
 
 
 def test_mask_gradients(inputs, mask, layer, sess):

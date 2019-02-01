@@ -53,11 +53,12 @@ def test_mask_given_in_inputs_propagate():
         tf.keras.layers.Dense(5),
     ])
     assert all(layer.supports_masking for layer in sequential_supports_mask.layers)
+    mask = tf.ones([5, 4], dtype=tf.bool)
     outputs = sequential_supports_mask(
         tf.ones([5, 4, 3]),
-        mask=tf.ones([5, 4], dtype=tf.bool),
+        mask=mask,
     )
-    assert outputs._keras_mask is not None
+    assert outputs._keras_mask is mask  # since Dense simply pass it.
 
 
 def test_masked_inputs_propagate():
@@ -68,4 +69,4 @@ def test_masked_inputs_propagate():
     ])
     assert all(layer.supports_masking for layer in sequential_supports_mask.layers)
     outputs = sequential_supports_mask(masked_inputs)
-    assert outputs._keras_mask is not None
+    assert outputs._keras_mask is masked_inputs._keras_mask

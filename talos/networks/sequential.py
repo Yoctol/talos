@@ -38,9 +38,8 @@ class Sequential(keras_Sequential):
         if self._layers:
             self._track_layers(self._layers)
 
-    # HACK override: fix output._keras_mask setting
+    # HACK override: fix output._keras_mask setting, and refactor nested block
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
-    # modify L855
     def _set_mask_metadata(self, inputs, outputs, previous_mask):
         output_list = generic_utils.to_list(outputs)
         mask_already_computed = all(hasattr(x, '_keras_mask') for x in output_list)
@@ -49,16 +48,14 @@ class Sequential(keras_Sequential):
         else:
             # fix this line of source code
             output_mask = [x._keras_mask for x in output_list]
-        if isinstance(outputs, (list, tuple)):
-            if output_mask is None:
-                output_mask = [None for _ in outputs]
-            for x, m in zip(outputs, output_mask):
-                try:
-                    x._keras_mask = m  # pylint: disable=protected-access
-                except AttributeError:
-                    pass  # C type such as dict. Masking not supported in this case.
+
+        if output_mask is None:
+            output_mask_list = [None for _ in output_list]
         else:
+            output_mask_list = generic_utils.to_list(output_mask)
+
+        for x, m in zip(output_list, output_mask_list):
             try:
-                outputs._keras_mask = output_mask  # pylint: disable=protected-access
+                x._keras_mask = m
             except AttributeError:
-                pass  # C type such as dict. Masking not supported in this case.
+                pass

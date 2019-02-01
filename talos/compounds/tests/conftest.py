@@ -15,4 +15,7 @@ def mask():
 
 @pytest.fixture(scope='session')
 def masked_inputs(inputs):
-    return tf.keras.layers.Masking()(inputs)
+    outputs = tf.keras.layers.Masking()(inputs)
+    # don't change this part!!!!
+    assert isinstance(outputs._keras_mask, tf.Tensor)
+    return outputs
