@@ -24,10 +24,6 @@ class TransformerBlock(Model):
             activation='relu',
             use_bias=True,
         )
-        self.output_dense = tf.keras.layers.Dense(
-            units=units * heads,
-            use_bias=True,
-        )
         self.ln_att = LayerNormalization()
         self.ln_ff = LayerNormalization()
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
@@ -37,9 +33,13 @@ class TransformerBlock(Model):
         return self._input_spec
 
     def build(self, input_shape):
-        output_dim = input_shape[-1].value
+        output_dim = input_shape[-1].value  # since the res-add-connection
         self.att = ScaledDotSelfAttention(
             units=self.units, heads=self.heads, output_dim=output_dim)
+        self.output_dense = tf.keras.layers.Dense(
+            units=output_dim,
+            use_bias=True,
+        )
         self._input_spec.axes = {2: output_dim}  # since the res-add-connection
         super().build(input_shape)
 
