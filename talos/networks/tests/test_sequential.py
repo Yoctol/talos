@@ -35,3 +35,37 @@ def test_context_manager_work_when_first_called(sequential):
     assert len(variables) > 0
     assert all(var.graph is new_graph for var in variables)
     assert all(var.name.startswith('scope') for var in variables)
+
+
+def test_mask_computed_by_layer_propagate():
+    sequential_with_masking = Sequential([
+        tf.keras.layers.Masking(),
+        tf.keras.layers.Dense(5),
+    ])
+    assert all(layer.supports_masking for layer in sequential_with_masking.layers)
+    outputs = sequential_with_masking(tf.ones([5, 4, 3]))
+    assert outputs._keras_mask is not None
+
+
+def test_mask_given_in_inputs_propagate():
+    sequential_supports_mask = Sequential([
+        tf.keras.layers.Dense(5),
+        tf.keras.layers.Dense(5),
+    ])
+    assert all(layer.supports_masking for layer in sequential_supports_mask.layers)
+    outputs = sequential_supports_mask(
+        tf.ones([5, 4, 3]),
+        mask=tf.ones([5, 4], dtype=tf.bool),
+    )
+    assert outputs._keras_mask is not None
+
+
+def test_masked_inputs_propagate():
+    masked_inputs = tf.keras.layers.Masking()(tf.ones([5, 4, 3]))
+    sequential_supports_mask = Sequential([
+        tf.keras.layers.Dense(5),
+        tf.keras.layers.Dense(5),
+    ])
+    assert all(layer.supports_masking for layer in sequential_supports_mask.layers)
+    outputs = sequential_supports_mask(masked_inputs)
+    assert outputs._keras_mask is not None
