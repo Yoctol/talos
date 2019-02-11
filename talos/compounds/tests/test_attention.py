@@ -6,9 +6,12 @@ import tensorflow as tf
 from ..attention import ScaledDotSelfAttention
 
 
-@pytest.fixture
-def layer():
-    return ScaledDotSelfAttention(units=3, heads=2, output_dim=5)
+@pytest.fixture(params=[
+    ScaledDotSelfAttention(units=3, heads=2, output_dim=5),
+    ScaledDotSelfAttention(units=3, heads=1, output_dim=5),
+])
+def layer(request):
+    return request.param
 
 
 def test_output_shape(inputs, layer):

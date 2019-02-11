@@ -48,29 +48,42 @@ class ScaledDotSelfAttention(Model):
 
         width = inputs.shape[1].value
         # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
-        query, key, value = [
-            tf.reshape(
-                tf.transpose(
-                    layer(inputs), perm=[0, 2, 1],
-                ),
-                shape=[-1, self.heads, self.units, width],
-            )
-            for layer in (self.query_layer, self.key_layer, self.value_layer)
-        ]
+        if self.heads > 1:
+            query, key, value = [
+                tf.reshape(
+                    tf.transpose(layer(inputs), perm=[0, 2, 1]),
+                    shape=[-1, self.heads, self.units, width],
+                )
+                for layer in (self.query_layer, self.key_layer, self.value_layer)
+            ]
+            logits = tf.matmul(query, key, transpose_a=True)   # shape (N, h, T', T)
+        else:
+            query, key, value = [
+                layer(inputs)
+                for layer in (self.query_layer, self.key_layer, self.value_layer)
+            ]  # shape (N, T, U)
+            logits = tf.matmul(query, key, transpose_b=True)  # shape (N, T', T)
 
-        logits = tf.matmul(query, key, transpose_a=True)   # shape (N, h, T', T)
-        weights = tf.nn.softmax(logits / np.sqrt(self.units))  # shape (N, h, T', T)
+        weights = tf.nn.softmax(logits / np.sqrt(self.units))  # shape (N, h, T', T) or (N, T', T)
 
         if mask is not None:
             # Renormalize for lower seqlen
-            weights *= mask[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
-            weights /= (tf.reduce_sum(weights, axis=3, keepdims=True) + tf.keras.backend.epsilon())
+            if self.heads > 1:
+                weights *= mask[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
+            else:
+                weights *= mask[:, tf.newaxis, :]  # shape (N, 1, T)
+            weights /= (tf.reduce_sum(weights, axis=-1, keepdims=True) + tf.keras.backend.epsilon())
 
-        # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
-        attended_vec = tf.matmul(value, weights, transpose_b=True)
-        attended_vec = tf.reshape(
-            attended_vec, shape=[-1, self.heads * self.units, width])  # shape (N, hU, T')
-        attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1])  # shape (N, T', hU)
+        if self.heads > 1:
+            # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
+            attended_vec = tf.matmul(value, weights, transpose_b=True)
+            attended_vec = tf.reshape(
+                attended_vec, shape=[-1, self.heads * self.units, width])  # shape (N, hU, T')
+            attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1])  # shape (N, T', hU)
+        else:
+            # (N, T', T) * (N, T, U) -> (N, T', U)
+            attended_vec = tf.matmul(weights, value)
+
         outputs = self.output_layer(attended_vec)
         return outputs
 
