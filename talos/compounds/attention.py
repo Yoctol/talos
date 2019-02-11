@@ -16,30 +16,39 @@ class ScaledDotSelfAttention(Model):
         ):
         super().__init__()
         self.units = units
-        self.heads = heads
         self.output_dim = output_dim
+        self.heads = heads
+        self.activation = activation
+        self.use_bias = use_bias
 
         self.supports_masking = True
-
-        self.query_layer, self.key_layer, self.value_layer = [
-            tf.keras.layers.Dense(
-                name=name,
-                units=units * heads,
-                activation=activation,
-                use_bias=use_bias,
-            )
-            for name in ('query_dense', 'key_dense', 'value_dense')
-        ]
         self.output_layer = tf.keras.layers.Dense(
             name='output_dense',
-            units=output_dim,
-            use_bias=use_bias,
+            units=self.output_dim,
+            use_bias=self.use_bias,
         )  # just for parametrization
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property  # override property
     def input_spec(self):
         return self._input_spec
+
+    def build(self, input_shape):
+        # Reference: https://tunz.kr/post/4
+        # In order to use glorot uniform with fan_out = units instead of units * heads
+        fan_in, fan_out = input_shape[-1].value, self.units
+        limit = np.sqrt(6. / (fan_in + fan_out))  # glorot uniform
+        self.query_layer, self.key_layer, self.value_layer = [
+            tf.keras.layers.Dense(
+                name=name,
+                units=self.units * self.heads,
+                activation=self.activation,
+                use_bias=self.use_bias,
+                kernel_initializer=tf.keras.initializers.uniform(-limit, limit),
+            )
+            for name in ('query_dense', 'key_dense', 'value_dense')
+        ]
+        super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
         if mask is not None:
