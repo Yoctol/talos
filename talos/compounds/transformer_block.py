@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from talos.layers import LayerNormalization
+from talos.layers import Dropout, LayerNormalization
 from talos.networks import Model
 
 from .attention import ScaledDotSelfAttention
@@ -8,7 +8,13 @@ from .attention import ScaledDotSelfAttention
 
 class TransformerBlock(Model):
 
-    def __init__(self, units: int, heads: int, hidden_units: int = None):
+    def __init__(
+            self,
+            units: int,
+            heads: int,
+            hidden_units: int = None,
+            dropout_rate: float = 0.1,
+        ):
         """Reference: https://arxiv.org/abs/1706.03762
         """
         super().__init__()
@@ -26,6 +32,7 @@ class TransformerBlock(Model):
         )
         self.ln_att = LayerNormalization()
         self.ln_ff = LayerNormalization()
+        self.dropout_layer = Dropout(dropout_rate)
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property
@@ -43,16 +50,28 @@ class TransformerBlock(Model):
         self._input_spec.axes = {2: output_dim}  # since the res-add-connection
         super().build(input_shape)
 
-    def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
-        att_vec = self.att(self.ln_att(inputs), mask=mask)
+    def call(
+            self,
+            inputs: tf.Tensor,
+            mask: tf.Tensor = None,
+            training: tf.Tensor = None,
+        ) -> tf.Tensor:
+        normed_inputs = self.ln_att(inputs)
+        att_vec = self.dropout_layer(
+            self.att(normed_inputs, mask=mask),
+            training=training,
+        )
         # since att will handle masking, multiply the res-part only.
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
-            att_vec += inputs * mask[:, :, tf.newaxis]
+            normed_att_vec = self.ln_ff(att_vec + inputs * mask[:, :, tf.newaxis])
         else:
-            att_vec += inputs
+            normed_att_vec = self.ln_ff(att_vec + inputs)
 
-        outputs = self.output_dense(self.hidden_dense(self.ln_ff(att_vec))) + att_vec
+        outputs = self.dropout_layer(
+            self.output_dense(self.hidden_dense(normed_att_vec)),
+            training=training,
+        ) + att_vec
         return outputs
 
     def compute_output_shape(self, input_shape):
