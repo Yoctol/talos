@@ -46,32 +46,44 @@ class ScaledDotSelfAttention(Model):
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
             inputs *= mask[:, :, tf.newaxis]  # shape (N, T, d_in)
 
-        query = self.query_layer(inputs)  # shape (N, T', hU)
-        key = self.key_layer(inputs)  # shape (N, T, hU)
-        value = self.value_layer(inputs)  # shape (N, T, hU)
-
         width = inputs.shape[1].value
-        matmul_broadcast_shape = [-1, self.heads, self.units, width]
         # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
-        query = tf.reshape(tf.transpose(query, perm=[0, 2, 1]), shape=matmul_broadcast_shape)
-        key = tf.reshape(tf.transpose(key, perm=[0, 2, 1]), shape=matmul_broadcast_shape)
-        value = tf.reshape(tf.transpose(value, perm=[0, 2, 1]), shape=matmul_broadcast_shape)
+        if self.heads > 1:
+            query, key, value = [
+                tf.reshape(
+                    tf.transpose(layer(inputs), perm=[0, 2, 1]),
+                    shape=[-1, self.heads, self.units, width],
+                )
+                for layer in (self.query_layer, self.key_layer, self.value_layer)
+            ]
+            logits = tf.matmul(query, key, transpose_a=True)   # shape (N, h, T', T)
+        else:
+            query, key, value = [
+                layer(inputs)
+                for layer in (self.query_layer, self.key_layer, self.value_layer)
+            ]  # shape (N, T, U)
+            logits = tf.matmul(query, key, transpose_b=True)  # shape (N, T', T)
 
-        logits = tf.matmul(
-            query, key, transpose_a=True) / np.sqrt(self.units)  # shape (N, h, T', T)
-        weights = tf.nn.softmax(logits)  # shape (N, h, T', T)
+        weights = tf.nn.softmax(logits / np.sqrt(self.units))  # shape (N, h, T', T) or (N, T', T)
 
         if mask is not None:
             # Renormalize for lower seqlen
-            weights *= mask[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
-            weights /= (tf.reduce_sum(weights, axis=3, keepdims=True) + tf.keras.backend.epsilon())
+            if self.heads > 1:
+                weights *= mask[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
+            else:
+                weights *= mask[:, tf.newaxis, :]  # shape (N, 1, T)
+            weights /= (tf.reduce_sum(weights, axis=-1, keepdims=True) + tf.keras.backend.epsilon())
 
-        # (N, h, T', T) * (N, h, T, U) -> (N, h, T', U)
-        attended_vec = tf.matmul(weights, value, transpose_b=True)  # shape (N, h, T', U)
+        if self.heads > 1:
+            # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
+            attended_vec = tf.matmul(value, weights, transpose_b=True)
+            attended_vec = tf.reshape(
+                attended_vec, shape=[-1, self.heads * self.units, width])  # shape (N, hU, T')
+            attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1])  # shape (N, T', hU)
+        else:
+            # (N, T', T) * (N, T, U) -> (N, T', U)
+            attended_vec = tf.matmul(weights, value)
 
-        attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1, 3])  # shape (N, T', h, U)
-        attended_vec = tf.reshape(
-            attended_vec, shape=[-1, width, self.heads * self.units])  # shape (N, T', hU)
         outputs = self.output_layer(attended_vec)
         return outputs
 
