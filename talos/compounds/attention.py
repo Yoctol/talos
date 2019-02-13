@@ -4,6 +4,9 @@ import tensorflow as tf
 from talos.networks import Model
 
 
+_LARGE_BIAS = 1e4
+
+
 class ScaledDotSelfAttention(Model):
 
     def __init__(
@@ -76,7 +79,7 @@ class ScaledDotSelfAttention(Model):
         else:
             logits = tf.matmul(query, key, transpose_b=True)  # shape (N, T', T)
 
-        logits = self._mask_weights(logits / np.sqrt(self.units), mask)
+        logits = self._mask_logits(logits / np.sqrt(self.units), mask)
         weights = tf.nn.softmax(logits)  # shape (N, h, T', T) or (N, T', T)
 
         if self.heads > 1:
@@ -92,24 +95,21 @@ class ScaledDotSelfAttention(Model):
         outputs = self.output_layer(attended_vec)
         return outputs
 
-    def _mask_weights(self, logits, mask):
-        if not (self.use_forward_mask or mask is not None):
-            return logits
-
+    def _mask_logits(self, logits, mask):
         if self.use_forward_mask:
             width = logits.shape[-1].value
             logits -= tf.constant(
-                np.triu(np.full([width, width], 1e4), k=1),
+                np.triu(np.full([width, width], _LARGE_BIAS), k=1),
                 dtype=logits.dtype,
             )
             # matrix of shape (T', T), Mt't = 1. if t' >= t else 0.
             # where t' come from query, t come from key, value.
-            # [[0, 1e3, 1e3],
-            #  [0, 0  , 1e3],
+            # [[0, 1e4, 1e4],
+            #  [0, 0  , 1e4],
             #  [0, 0  ,   0]]
 
         if mask is not None:
-            bias = (1. - mask) * 1e4
+            bias = (1. - mask) * _LARGE_BIAS
             if self.heads > 1:
                 logits -= bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
             else:
