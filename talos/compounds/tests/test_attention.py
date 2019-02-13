@@ -63,8 +63,11 @@ def test_mask_gradients(inputs, mask, layer, sess):
         assert (dropped_section == 0.).all()
 
 
-def test_forward_mask_gradients(inputs, sess):
-    layer = ScaledDotSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True)
+@pytest.mark.parametrize('layer', [
+    ScaledDotSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),
+    ScaledDotSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True),
+])
+def test_forward_mask_gradients(inputs, layer, sess):
     maxlen, channel = inputs.shape.as_list()[1:]
 
     outputs = layer(inputs)
