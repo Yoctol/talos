@@ -33,7 +33,6 @@ class ScaledDotSelfAttention(Model):
             use_bias=self.use_bias,
         )  # just for parametrization
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
-        self.fuck = []
 
     @property  # override property
     def input_spec(self):
