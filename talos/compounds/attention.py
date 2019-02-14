@@ -13,7 +13,7 @@ class GlobalAttentionPooling1D(Model):
     def __init__(
             self,
             units: int,
-            heads: int=1,
+            heads: int = 1,
             activation: str = 'tanh',
             use_bias: bool = False,
             reg_coeff: float = 0.,
@@ -73,6 +73,8 @@ class GlobalAttentionPooling1D(Model):
                 weights_product - self.identity_matrix,
             ), axis=[1, 2])  # shape (N)
             batch_penalty = tf.reduce_mean(penalty)
+            # NOTE directly call self.add_loss won't work...
+            # keras Model do some complicated check...
             self.output_layer.add_loss(batch_penalty)
 
         # shape (N, h, input_dim)
