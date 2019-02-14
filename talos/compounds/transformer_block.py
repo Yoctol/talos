@@ -14,6 +14,7 @@ class TransformerBlock(Model):
             heads: int,
             hidden_units: int = None,
             dropout_rate: float = 0.1,
+            use_forward_mask: bool = False,
         ):
         """Reference: https://arxiv.org/abs/1706.03762
         """
@@ -22,6 +23,7 @@ class TransformerBlock(Model):
 
         self.units = units
         self.heads = heads
+        self.use_forward_mask = use_forward_mask
 
         if hidden_units is None:
             hidden_units = units * heads * 4  # ratio in paper
@@ -42,7 +44,11 @@ class TransformerBlock(Model):
     def build(self, input_shape):
         output_dim = input_shape[-1].value  # since the res-add-connection
         self.att = ScaledDotSelfAttention(
-            units=self.units, heads=self.heads, output_dim=output_dim)
+            units=self.units,
+            heads=self.heads,
+            output_dim=output_dim,
+            use_forward_mask=self.use_forward_mask,
+        )
         self.output_dense = tf.keras.layers.Dense(
             units=output_dim,
             use_bias=True,
