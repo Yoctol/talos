@@ -153,9 +153,7 @@ from .embeddings import Embedding
 from .layer_norm import LayerNormalization
 
 from .pooling import GlobalAveragePooling1D
-from .pooling import GlobalAttentionPooling1D
 from .pooling import GlobalAvgPool1D
-from .pooling import GlobalAttPool1D
 
 from .positional_encode import PositionalEncode
 
