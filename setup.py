@@ -9,18 +9,23 @@ if readme.exists():
 else:
     long_description = '-'
 
+REQUIRED_PACKAGES = [
+    'tensorflow==1.11.0',
+]
+
+
 setup(
     name='talos',
-    version='0.1.0',
+    version='1.0.4',
     description='Powerful Neural Network Builder',
     long_description=long_description,
     python_requires='>=3.6',
     packages=[
         'talos',
     ],
+    install_requires=REQUIRED_PACKAGES,
     author='Jsaon',
     author_email='jsaon@yoctol.com',
     url='',
     license='MIT',
-    install_requires=[],
 )
