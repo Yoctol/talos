@@ -10,7 +10,7 @@ else:
     long_description = '-'
 
 REQUIRED_PACKAGES = [
-    tensorflow==1.11.0,
+    'tensorflow==1.11.0',
 ]
 
 
@@ -23,9 +23,9 @@ setup(
     packages=[
         'talos',
     ],
+    install_requires=REQUIRED_PACKAGES,
     author='Jsaon',
     author_email='jsaon@yoctol.com',
     url='',
     license='MIT',
-    install_requires=[],
 )
