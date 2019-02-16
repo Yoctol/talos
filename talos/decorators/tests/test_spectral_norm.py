@@ -3,10 +3,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from ..spectral_norm import (
-    add_spectral_norm,
-    add_spectral_norm_for_layer,
-)
+from ..spectral_norm import add_spectral_norm
 
 
 @pytest.mark.parametrize('layer,inputs', [
@@ -15,9 +12,11 @@ from ..spectral_norm import (
     (tf.keras.layers.Conv2D(filters=10, kernel_size=3), tf.zeros([3, 4, 5, 5])),
     (tf.keras.layers.GRUCell(10), tf.zeros([3, 4])),
     (tf.keras.layers.LSTMCell(10), tf.zeros([3, 4])),
+    (tf.keras.layers.GRU(10), tf.zeros([3, 4, 5])),
+    (tf.keras.layers.LSTM(10), tf.zeros([3, 4, 5])),
 ])
 def test_spectral_norm_for_layer(layer, inputs, sess):
-    add_spectral_norm_for_layer(layer)
+    add_spectral_norm(layer)
     if hasattr(layer, 'state_size'):
         state = layer.get_initial_state(inputs)
         if not isinstance(state, list):
@@ -26,11 +25,7 @@ def test_spectral_norm_for_layer(layer, inputs, sess):
     else:
         layer(inputs)
 
-    kernel_list = [
-        attr
-        for attr_name, attr in layer.__dict__.items()
-        if attr_name.endswith('kernel')
-    ]
+    kernel_list = recursive_get_kernels(layer)
     u_vector_list = layer.non_trainable_variables
 
     assert len(layer.updates) == len(u_vector_list) == len(kernel_list)
@@ -50,21 +45,12 @@ def test_spectral_norm_for_layer(layer, inputs, sess):
             )
 
 
-@pytest.mark.parametrize('rnn_layer', [
-    tf.keras.layers.GRU(10),
-    tf.keras.layers.LSTM(10),
-])
-def test_add_spectral_norm(rnn_layer):
-    add_spectral_norm(rnn_layer)
-    inputs = tf.zeros([3, 4, 5])
-    rnn_layer(inputs)
+def recursive_get_kernels(layer):
+    if hasattr(layer, 'cell'):
+        layer = layer.cell
 
-    kernel_list = [
+    return [
         attr
-        for attr_name, attr in rnn_layer.cell.__dict__.items()
+        for attr_name, attr in layer.__dict__.items()
         if attr_name.endswith('kernel')
     ]
-    u_vector_list = rnn_layer.non_trainable_variables
-
-    assert len(rnn_layer.updates) == len(u_vector_list) == len(kernel_list)
-    assert all([kernel.name.endswith('_sn:0') for kernel in kernel_list])
