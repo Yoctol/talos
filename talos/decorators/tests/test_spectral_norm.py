@@ -1,28 +1,40 @@
+import pytest
+
 import tensorflow as tf
 
 from ..spectral_norm import add_spectral_norm
 
 
-def test_spectral_norm_dense():
-    dense_layer = tf.keras.layers.Dense(10)
-    add_spectral_norm(dense_layer)
+@pytest.mark.parametrize('layer,inputs', [
+    (tf.keras.layers.Dense(10), tf.zeros([3, 4])),
+    (tf.keras.layers.Conv1D(filters=10, kernel_size=3), tf.zeros([3, 4, 5])),
+    (tf.keras.layers.Conv2D(filters=10, kernel_size=3), tf.zeros([3, 4, 5, 5])),
+])
+def test_spectral_norm_single_kernel(layer, inputs):
+    add_spectral_norm(layer)
+    layer(inputs)
 
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 20])
-    dense_layer(inputs)
-
-    assert len(dense_layer.updates) == 1
-    assert len(dense_layer.trainable_variables) == 2
-    assert dense_layer.updates[0].name == dense_layer.name + "/kernel/power_iter"
-    assert dense_layer.kernel.name == dense_layer.name + "/kernel_sn:0"
+    assert len(layer.updates) == 1
+    assert layer.kernel.name.endswith('_sn:0')
 
 
-def test_spectral_norm_gru():
-    gru_cell = tf.nn.rnn_cell.GRUCell(10)
-    add_spectral_norm(gru_cell)
+@pytest.mark.parametrize('layer', [
+    tf.keras.layers.GRUCell(10),
+    tf.keras.layers.LSTMCell(10),
+])
+def test_spectral_norm_rnn(layer):
+    inputs = tf.zeros([3, 4])
+    state = layer.get_initial_state(inputs)
+    if not isinstance(state, list):
+        state = [state]
+    add_spectral_norm(layer)
+    layer(inputs, state)
 
-    inputs = tf.placeholder(dtype=tf.float32, shape=[None, 20])
-    state = tf.placeholder(dtype=tf.float32, shape=[None, gru_cell.state_size])
-    gru_cell(inputs, state)
+    kernel_list = [
+        attr
+        for attr_name, attr in layer.__dict__.items()
+        if attr_name.endswith('kernel')
+    ]
 
-    assert len(gru_cell.updates) == 2
-    assert len(gru_cell.trainable_variables) == 4
+    assert len(layer.updates) == len(kernel_list)
+    assert [kernel.name.endswith('_sn:0') for kernel in kernel_list]

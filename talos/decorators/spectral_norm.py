@@ -35,7 +35,7 @@ def add_spectral_norm(
         u_vector = original_add_weight(
             name=f'{name}/singular_vector',
             shape=(kernel_matrix.shape[0].value, 1),
-            initializer=tf.keras.initializer.lecun_normal(),  # unit vector
+            initializer=tf.keras.initializers.lecun_normal(),  # unit vector
             trainable=False,
             dtype=kernel.dtype,
         )  # shape (U, 1)
@@ -48,7 +48,7 @@ def add_spectral_norm(
         )
 
         new_u = tf.nn.l2_normalize(kernel_matrix @ v_vector, axis=0)  # shape (U, 1)
-        update_u = tf.assign(u_vector, new_u, name=f'{name}/power_iter')
+        update_u = tf.assign(u_vector, new_u, name=f'{name}_sn/power_iter')
         self.add_update(update_u)
 
         return normed_kernel
