@@ -13,6 +13,7 @@ from talos.layers import (
     LSTM,
     LSTMCell,
 )
+from talos.networks import Sequential
 from ..spectral_norm import add_spectral_norm
 
 
@@ -24,7 +25,11 @@ from ..spectral_norm import add_spectral_norm
     (LSTMCell(10), tf.zeros([3, 4])),
     (GRU(10), tf.zeros([3, 4, 5])),
     (LSTM(10), tf.zeros([3, 4, 5])),
-    (tf.keras.Sequential([Dense(10), Dense(10), Dense(10)]), tf.zeros([3, 4])),
+    (Sequential([Dense(10), Dense(10)]), tf.zeros([3, 4])),
+    (Sequential([
+        Sequential([Dense(10), Dense(10)]),
+        LSTM(10),
+    ]), tf.zeros([3, 4, 5])),
 ])
 def test_spectral_norm_for_layer(layer, inputs, sess):
     add_spectral_norm(layer)
