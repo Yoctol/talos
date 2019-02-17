@@ -7,11 +7,19 @@ _WEIGHTS_VARIABLE_NAME = "kernel"
 
 
 def add_spectral_norm(layer: tf.layers.Layer):
-    if isinstance(layer, tf.keras.layers.RNN):
-        add_spectral_norm(layer.cell)
-    elif isinstance(layer, tf.keras.Sequential):
+    if isinstance(layer, tf.keras.Sequential):
         for sub_layer in layer.layers:
             add_spectral_norm(sub_layer)
+    elif isinstance(layer, tf.keras.layers.RNN):
+        add_spectral_norm(layer.cell)
+    elif isinstance(layer, tf.keras.layers.StackedRNNCells):
+        for cell in layer.cells:
+            add_spectral_norm(cell)
+    elif isinstance(layer, tf.keras.layers.Bidirectional):
+        add_spectral_norm(layer.forward_layer)
+        add_spectral_norm(layer.backward_layer)
+    elif isinstance(layer, tf.keras.layers.Wrapper):
+        add_spectral_norm(layer.layer)
     else:
         add_spectral_norm_for_layer(layer)
 

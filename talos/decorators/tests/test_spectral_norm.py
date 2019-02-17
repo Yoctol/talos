@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 from talos.layers import (
+    Bidirectional,
     Conv1D,
     Conv2D,
     Dense,
@@ -12,6 +13,8 @@ from talos.layers import (
     GRUCell,
     LSTM,
     LSTMCell,
+    RNN,
+    StackedRNNCells,
 )
 from talos.networks import Sequential
 from ..spectral_norm import add_spectral_norm
@@ -25,11 +28,15 @@ from ..spectral_norm import add_spectral_norm
     (LSTMCell(10), tf.zeros([3, 4])),
     (GRU(10), tf.zeros([3, 4, 5])),
     (LSTM(10), tf.zeros([3, 4, 5])),
-    (Sequential([Dense(10), Dense(10)]), tf.zeros([3, 4])),
     (Sequential([
         Sequential([Dense(10), Dense(10)]),
         LSTM(10),
     ]), tf.zeros([3, 4, 5])),
+    (RNN(StackedRNNCells([
+        LSTMCell(5),
+        LSTMCell(5),
+    ])), tf.zeros([3, 4, 5])),
+    (Bidirectional(LSTM(10)), tf.zeros([3, 4, 5])),
 ])
 def test_spectral_norm_for_layer(layer, inputs, sess):
     add_spectral_norm(layer)
@@ -45,7 +52,8 @@ def test_spectral_norm_for_layer(layer, inputs, sess):
     u_vector_list = layer.non_trainable_variables
 
     assert len(layer.updates) == len(u_vector_list) == len(kernel_list)
-    assert all([kernel.name.endswith('_sn:0') for kernel in kernel_list])
+    # Since norm come from division
+    assert all([kernel.op.type == 'RealDiv' for kernel in kernel_list])
 
     sess.run(tf.variables_initializer(layer.variables))
 
@@ -67,6 +75,21 @@ def recursive_get_kernel_attributes(layer):
             recursive_get_kernel_attributes(layer)
             for layer in layer.layers
         ]))
+
+    if isinstance(layer, tf.keras.layers.StackedRNNCells):
+        return list(chain.from_iterable([
+            recursive_get_kernel_attributes(cell)
+            for cell in layer.cells
+        ]))
+
+    if isinstance(layer, tf.keras.layers.Bidirectional):
+        return list(chain.from_iterable([
+            recursive_get_kernel_attributes(layer.forward_layer),
+            recursive_get_kernel_attributes(layer.backward_layer),
+        ]))
+
+    if isinstance(layer, tf.keras.layers.Wrapper):
+        return recursive_get_kernel_attributes(layer.layer)
 
     if isinstance(layer, tf.keras.layers.RNN):
         return recursive_get_kernel_attributes(layer.cell)
