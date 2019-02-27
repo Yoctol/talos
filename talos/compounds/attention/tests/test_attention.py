@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from .. import (
     GlobalAttentionPooling1D,
-    ScaledDotSelfAttention,
+    MultiHeadSelfAttention,
 )
 
 
@@ -78,11 +78,11 @@ class TestGlobalAttentionPooling1D(AttentionTestTemplate):
         assert all(loss.shape.ndims == 0 for loss in losses)
 
 
-class TestScaleDotSelfAttention(AttentionTestTemplate):
+class TestMultiHeadSelfAttention(AttentionTestTemplate):
 
     @pytest.fixture(params=[
-        ScaledDotSelfAttention(units=3, heads=2, output_dim=5),
-        ScaledDotSelfAttention(units=3, heads=1, output_dim=5),
+        MultiHeadSelfAttention(units=3, heads=2, output_dim=5),
+        MultiHeadSelfAttention(units=3, heads=1, output_dim=5),
     ])
     def layer(self, request):
         return request.param
@@ -95,8 +95,8 @@ class TestScaleDotSelfAttention(AttentionTestTemplate):
         assert outputs._keras_mask is masked_inputs._keras_mask
 
     @pytest.mark.parametrize('layer', [
-        ScaledDotSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),
-        ScaledDotSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True),
+        MultiHeadSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),
+        MultiHeadSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True),
     ])
     def test_forward_mask_gradients(self, inputs, layer, sess):
         maxlen, channel = inputs.shape.as_list()[1:]

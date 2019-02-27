@@ -7,7 +7,7 @@ from talos.networks import Model
 _LARGE_BIAS = 1e4
 
 
-class ScaledDotSelfAttention(Model):
+class _MultiHeadScaledDotAttention(Model):
 
     def __init__(
             self,
@@ -16,7 +16,6 @@ class ScaledDotSelfAttention(Model):
             heads: int = 1,
             activation: str = None,
             use_bias: bool = False,
-            use_forward_mask: bool = False,
         ):
         super().__init__()
         self.units = units
@@ -24,7 +23,6 @@ class ScaledDotSelfAttention(Model):
         self.heads = heads
         self.activation = activation
         self.use_bias = use_bias
-        self.use_forward_mask = use_forward_mask
 
         self.supports_masking = True
         self.output_layer = tf.keras.layers.Dense(
@@ -55,22 +53,13 @@ class ScaledDotSelfAttention(Model):
         ]
         super().build(input_shape)
 
-    def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
-        if mask is not None:
-            mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
-            inputs *= mask[:, :, tf.newaxis]  # shape (N, T, d_in)
-
-        width = inputs.shape[1].value
-        query, key, value = [
-            layer(inputs)
-            for layer in (self.query_layer, self.key_layer, self.value_layer)
-        ]  # shape (N, T, hU)
+    def _multihead_attention(self, query, key, value, mask):
         if self.heads > 1:
             # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
             query, key, value = [
                 tf.reshape(
                     tf.transpose(tensor, perm=[0, 2, 1]),
-                    shape=[-1, self.heads, self.units, width],
+                    shape=[-1, self.heads, self.units, tensor.shape[1].value],
                 )
                 for tensor in (query, key, value)
             ]
@@ -85,12 +74,74 @@ class ScaledDotSelfAttention(Model):
             # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
             attended_vec = tf.matmul(value, weights, transpose_b=True)
             attended_vec = tf.reshape(
-                attended_vec, shape=[-1, self.heads * self.units, width])  # shape (N, hU, T')
+                attended_vec,
+                shape=[-1, self.heads * self.units, attended_vec.shape[-1].value],
+            )  # shape (N, hU, T')
             attended_vec = tf.transpose(attended_vec, perm=[0, 2, 1])  # shape (N, T', hU)
         else:
             # (N, T', T) * (N, T, U) -> (N, T', U)
             attended_vec = tf.matmul(weights, value)
 
+        return attended_vec
+
+    def _mask_logits(self, logits, mask):
+        if mask is None:
+            return logits
+
+        bias = (1. - mask) * _LARGE_BIAS
+        if self.heads > 1:
+            bias = bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
+        else:
+            bias = bias[:, tf.newaxis, :]  # shape (N, 1, T)
+
+        return logits - bias
+
+    def compute_output_shape(self, input_shape):
+        output_shape = input_shape.as_list()
+        output_shape[2] = self.output_dim
+        return tf.TensorShape(output_shape)
+
+    def compute_mask(self, inputs, mask):
+        # use same mask
+        return mask
+
+
+class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
+
+    def __init__(
+            self,
+            units: int,
+            output_dim: int,
+            heads: int = 1,
+            activation: str = None,
+            use_bias: bool = False,
+            use_forward_mask: bool = False,
+        ):
+        super().__init__(
+            units=units,
+            output_dim=output_dim,
+            heads=heads,
+            activation=activation,
+            use_bias=use_bias,
+        )
+        self.use_forward_mask = use_forward_mask
+
+    def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
+        if mask is not None:
+            mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+            inputs *= mask[:, :, tf.newaxis]  # shape (N, T, d_in)
+
+        query, key, value = [
+            layer(inputs)
+            for layer in (self.query_layer, self.key_layer, self.value_layer)
+        ]  # shape (N, T, hU)
+
+        attended_vec = self._multihead_attention(
+            query=query,
+            key=key,
+            value=value,
+            mask=mask,
+        )
         outputs = self.output_layer(attended_vec)
         return outputs
 
@@ -107,20 +158,5 @@ class ScaledDotSelfAttention(Model):
             #  [0, 0  , 1e4],
             #  [0, 0  ,   0]]
 
-        if mask is not None:
-            bias = (1. - mask) * _LARGE_BIAS
-            if self.heads > 1:
-                logits -= bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
-            else:
-                logits -= bias[:, tf.newaxis, :]  # shape (N, 1, T)
-
+        logits = super()._mask_logits(logits, mask)
         return logits
-
-    def compute_output_shape(self, input_shape):
-        output_shape = input_shape.as_list()
-        output_shape[2] = self.output_dim
-        return tf.TensorShape(output_shape)
-
-    def compute_mask(self, inputs, mask):
-        # use same mask
-        return mask

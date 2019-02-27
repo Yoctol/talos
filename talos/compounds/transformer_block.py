@@ -3,7 +3,7 @@ import tensorflow as tf
 from talos.layers import Dropout, LayerNormalization
 from talos.networks import Model
 
-from .attention import ScaledDotSelfAttention
+from .attention import MultiHeadSelfAttention
 
 
 class TransformerBlock(Model):
@@ -43,7 +43,7 @@ class TransformerBlock(Model):
 
     def build(self, input_shape):
         output_dim = input_shape[-1].value  # since the res-add-connection
-        self.att = ScaledDotSelfAttention(
+        self.att = MultiHeadSelfAttention(
             units=self.units,
             heads=self.heads,
             output_dim=output_dim,
