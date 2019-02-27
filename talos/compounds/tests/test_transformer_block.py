@@ -27,7 +27,7 @@ class TestTransformerBlock:
         grads = tf.gradients(outputs, inputs)[0]  # same shape as inputs
 
         mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
-        mask_batch[:, 0] = True  # to make sure at least one True
+        mask_batch[:, :2] = True  # to make sure at least one True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grad_batch = sess.run(
@@ -104,8 +104,8 @@ class TestTransformerDecoderBlock:
 
         mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
         encoder_mask_batch = np.random.choice(2, size=[5, maxlen_encoder]).astype(np.bool)
-        mask_batch[:, 0] = True  # to make sure at least one True
-        encoder_mask_batch[:, 0] = True
+        mask_batch[:, :2] = True  # to make sure at least 2 True
+        encoder_mask_batch[:, :2] = True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grads_batch, encoder_grads_batch = sess.run(

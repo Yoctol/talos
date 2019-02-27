@@ -44,7 +44,7 @@ class AttentionTestTemplate(abc.ABC):
         grads = tf.gradients(outputs, inputs)[0]  # same shape as inputs
 
         mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
-        mask_batch[:, 0] = True  # to make sure at least one True
+        mask_batch[:, :2] = True  # to make sure at least 2 True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grads_batch = sess.run(
@@ -155,8 +155,8 @@ class TestMultiHeadAttention:
 
         mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
         kv_mask_batch = np.random.choice(2, size=[5, maxlen_encoder]).astype(np.bool)
-        mask_batch[:, 0] = True  # to make sure at least one True
-        kv_mask_batch[:, 0] = True
+        mask_batch[:, :2] = True  # to make sure at least 2 True
+        kv_mask_batch[:, :2] = True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grads_batch, kv_grads_batch = sess.run(
@@ -171,6 +171,7 @@ class TestMultiHeadAttention:
                 kv_mask: kv_mask_batch,
             },
         )
+
         for mask_sample, grad_sample, kv_mask_sample, kv_grad_sample in zip(
                 mask_batch,
                 grads_batch,
