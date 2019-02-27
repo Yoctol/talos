@@ -69,7 +69,4 @@ class Model(keras_Model, abc.ABC):
             output_mask_list = generic_utils.to_list(output_mask)
 
         for x, m in zip(output_list, output_mask_list):
-            try:
-                x._keras_mask = m
-            except AttributeError:
-                pass
+            x._keras_mask = m
