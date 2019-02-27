@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
-from ..attention import (
+from .. import (
     GlobalAttentionPooling1D,
     ScaledDotSelfAttention,
 )
