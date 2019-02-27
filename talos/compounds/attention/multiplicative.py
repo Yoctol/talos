@@ -85,15 +85,6 @@ class _MultiHeadScaledDotAttention(Model):
 
         return logits - bias
 
-    def compute_output_shape(self, input_shape):
-        output_shape = input_shape.as_list()
-        output_shape[2] = self.output_dim
-        return tf.TensorShape(output_shape)
-
-    def compute_mask(self, inputs, mask):
-        # use same mask
-        return mask
-
 
 class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
@@ -132,14 +123,13 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
         super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
-        if mask is not None:
-            mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
-            inputs *= mask[:, :, tf.newaxis]  # shape (N, T, d_in)
-
         query, key, value = [
             layer(inputs)
             for layer in (self.query_layer, self.key_layer, self.value_layer)
         ]  # shape (N, T, hU)
+
+        if mask is not None:
+            mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
 
         attended_vec = self._multihead_attention(
             query=query,
@@ -148,6 +138,9 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             mask=mask,
         )
         outputs = self.output_layer(attended_vec)
+
+        if mask is not None:
+            outputs *= mask[:, :, tf.newaxis]
         return outputs
 
     def _mask_logits(self, logits, mask):
@@ -165,6 +158,15 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
         logits = super()._mask_logits(logits, mask)
         return logits
+
+    def compute_mask(self, inputs, mask):
+        # use same mask
+        return mask
+
+    def compute_output_shape(self, input_shape):
+        output_shape = input_shape.as_list()
+        output_shape[2] = self.output_dim
+        return tf.TensorShape(output_shape)
 
 
 class MultiHeadAttention(_MultiHeadScaledDotAttention):
@@ -217,38 +219,40 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
         if not (len(inputs_tuple) == len(mask) == 2):
             raise TypeError("both 'inputs' and 'mask' should be length 2 tuple!")
 
-        inputs, encoder_outputs = inputs_tuple
-        inputs_mask, encoder_outputs_mask = mask
+        q, kv = inputs_tuple
+        inputs_mask, kv_mask = mask
 
-        if inputs_mask is not None:
-            inputs_mask = tf.cast(inputs_mask, inputs.dtype)  # shape (N, T')
-            inputs *= inputs_mask[:, :, tf.newaxis]  # shape (N, T', d_in)
-
-        if encoder_outputs_mask is not None:
-            encoder_outputs_mask = tf.cast(
-                encoder_outputs_mask, encoder_outputs.dtype)  # shape (N, T)
-            encoder_outputs *= encoder_outputs_mask[:, :, tf.newaxis]  # shape (N, T, d_en)
-
-        query = self.query_layer(inputs)  # shape (N, T', hU)
+        query = self.query_layer(q)  # shape (N, T', hU)
         key, value = [
-            layer(encoder_outputs)
+            layer(kv)
             for layer in (self.key_layer, self.value_layer)
         ]  # shape (N, T, hU)
+
+        if kv_mask is not None:
+            kv_mask = tf.cast(kv_mask, kv.dtype)  # shape (N, T)
 
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
             value=value,
-            mask=encoder_outputs_mask,
+            mask=kv_mask,
         )
         outputs = self.output_layer(attended_vec)
-        return outputs, encoder_outputs
+
+        if inputs_mask is not None:
+            outputs *= tf.cast(inputs_mask, outputs.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
+
+        return outputs
+
+    def compute_mask(self, inputs, mask):
+        # use same mask
+        return mask[0]
 
     def compute_output_shape(self, input_shape_tuple):
         if not (len(input_shape_tuple) == 2):
             raise TypeError("'input_shape_tuple' should be length 2 tuple!")
 
-        input_shape, encoder_outputs_shape = input_shape_tuple
+        input_shape, _ = input_shape_tuple
         output_shape = input_shape.as_list()
         output_shape[2] = self.output_dim
-        return tf.TensorShape(output_shape), encoder_outputs_shape
+        return tf.TensorShape(output_shape)
