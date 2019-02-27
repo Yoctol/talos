@@ -48,7 +48,7 @@ class Model(keras_Model, abc.ABC):
     def call(self, inputs, training=None, mask=None):
         pass
 
-    # HACK override: fix output._keras_mask setting
+    # HACK override: fix output._keras_mask setting and remove the try/except part.
     # don't use sublayer outputs keras_mask if implement compute_mask method.
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
     def _set_mask_metadata(self, inputs, outputs, previous_mask):
@@ -69,4 +69,5 @@ class Model(keras_Model, abc.ABC):
             output_mask_list = generic_utils.to_list(output_mask)
 
         for x, m in zip(output_list, output_mask_list):
+            # fix this line of source code
             x._keras_mask = m

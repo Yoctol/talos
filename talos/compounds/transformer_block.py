@@ -34,10 +34,13 @@ class TransformerBlock(Model):
             activation='relu',
             use_bias=True,
         )
-        self.ln_self_att = LayerNormalization()
-        self.ln_ff = LayerNormalization()
-        self.dropout_self_att = Dropout(dropout_rate)
-        self.dropout_ff = Dropout(dropout_rate)
+        self.ln_self_att, self.ln_ff = [LayerNormalization() for _ in range(2)]
+
+        if 0. < dropout_rate < 1.:
+            self.dropout_self_att, self.dropout_ff = [Dropout(dropout_rate) for _ in range(2)]
+        else:
+            self.dropout_self_att = self.dropout_ff = lambda x: x
+
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property
@@ -117,12 +120,15 @@ class TransformerDecoderBlock(Model):
             activation='relu',
             use_bias=True,
         )
-        self.ln_self_att = LayerNormalization()
-        self.ln_att = LayerNormalization()
-        self.ln_ff = LayerNormalization()
-        self.dropout_self_att = Dropout(dropout_rate)
-        self.dropout_att = Dropout(dropout_rate)
-        self.dropout_ff = Dropout(dropout_rate)
+        self.ln_self_att, self.ln_att, self.ln_ff = [LayerNormalization() for _ in range(3)]
+
+        if 0. < dropout_rate < 1.:
+            self.dropout_self_att, self.dropout_att, self.dropout_ff = [
+                Dropout(dropout_rate)
+                for _ in range(3)
+            ]
+        else:
+            self.dropout_self_att = self.dropout_att = self.dropout_ff = lambda x: x
 
         self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
 
@@ -158,9 +164,11 @@ class TransformerDecoderBlock(Model):
     def call(
             self,
             inputs_tuple: Tuple[tf.Tensor, tf.Tensor],
-            mask: Tuple[tf.Tensor, tf.Tensor] = (None, None),
+            mask: Tuple[tf.Tensor, tf.Tensor] = None,
             training: tf.Tensor = None,
         ) -> tf.Tensor:
+        if mask is None:
+            mask = [None, None]
         if not (len(inputs_tuple) == len(mask) == 2):
             raise TypeError("both 'inputs' and 'mask' should be length 2 tuple!")
 
@@ -178,7 +186,7 @@ class TransformerDecoderBlock(Model):
         att_vec = self.dropout_att(
             self.encoder_decoder_att(
                 [self.ln_att(self_att_vec + inputs), encoder_outputs],
-                mask=mask,
+                mask=[inputs_mask, encoder_outputs_mask],
             ),
             training=training,
         )

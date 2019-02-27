@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List
 
 import numpy as np
 import tensorflow as tf
@@ -213,9 +213,11 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
 
     def call(
             self,
-            inputs_tuple: Tuple[tf.Tensor, tf.Tensor],
-            mask: Tuple[tf.Tensor, tf.Tensor] = (None, None),
+            inputs_tuple: List[tf.Tensor],
+            mask: List[tf.Tensor] = None,
         ) -> tf.Tensor:
+        if mask is None:
+            mask = [None, None]
         if not (len(inputs_tuple) == len(mask) == 2):
             raise TypeError("both 'inputs' and 'mask' should be length 2 tuple!")
 
