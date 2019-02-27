@@ -186,14 +186,14 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
         )
         self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
 
-    def build(self, input_shape):
-        if len(input_shape) != 2:
+    def build(self, input_shape_tuple):
+        if len(input_shape_tuple) != 2:
             raise TypeError("both 'inputs' should be length 2 tuple!")
 
         # Reference: https://tunz.kr/post/4
         # In order to use glorot uniform with fan_out = units instead of units * heads
 
-        prev_input_shape, encoder_output_shape = input_shape
+        input_shape, encoder_output_shape = input_shape_tuple
         self.query_layer, self.key_layer, self.value_layer = [
             tf.keras.layers.Dense(
                 name=name,
@@ -204,22 +204,32 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             )
             for name, shape in zip(
                 ['query_dense', 'key_dense', 'value_dense'],
-                [prev_input_shape, encoder_output_shape, encoder_output_shape],
+                [input_shape, encoder_output_shape, encoder_output_shape],
             )
         ]
-        super().build(input_shape)
+        super().build(input_shape_tuple)
 
     def call(
             self,
-            inputs: Tuple[tf.Tensor, tf.Tensor],
-            mask: Tuple[tf.Tensor, tf.Tensor] = None,
+            inputs_tuple: Tuple[tf.Tensor, tf.Tensor],
+            mask: Tuple[tf.Tensor, tf.Tensor] = (None, None),
         ) -> tf.Tensor:
-        if not (len(inputs) == 2):
+        if not (len(inputs_tuple) == len(mask) == 2):
             raise TypeError("both 'inputs' and 'mask' should be length 2 tuple!")
 
-        prev_inputs, encoder_outputs = inputs
+        inputs, encoder_outputs = inputs_tuple
+        inputs_mask, encoder_outputs_mask = mask
 
-        query = self.query_layer(prev_inputs)  # shape (N, T', hU)
+        if inputs_mask is not None:
+            inputs_mask = tf.cast(inputs_mask, inputs.dtype)  # shape (N, T')
+            inputs *= inputs_mask[:, :, tf.newaxis]  # shape (N, T', d_in)
+
+        if encoder_outputs_mask is not None:
+            encoder_outputs_mask = tf.cast(
+                encoder_outputs_mask, encoder_outputs.dtype)  # shape (N, T)
+            encoder_outputs *= encoder_outputs_mask[:, :, tf.newaxis]  # shape (N, T, d_en)
+
+        query = self.query_layer(inputs)  # shape (N, T', hU)
         key, value = [
             layer(encoder_outputs)
             for layer in (self.key_layer, self.value_layer)
@@ -229,12 +239,16 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             query=query,
             key=key,
             value=value,
+            mask=encoder_outputs_mask,
         )
         outputs = self.output_layer(attended_vec)
         return outputs, encoder_outputs
 
-    def compute_output_shape(self, input_shape):
-        input_shape, encoder_outputs_shape = input_shape
+    def compute_output_shape(self, input_shape_tuple):
+        if not (len(input_shape_tuple) == 2):
+            raise TypeError("'input_shape_tuple' should be length 2 tuple!")
+
+        input_shape, encoder_outputs_shape = input_shape_tuple
         output_shape = input_shape.as_list()
         output_shape[2] = self.output_dim
         return tf.TensorShape(output_shape), encoder_outputs_shape
