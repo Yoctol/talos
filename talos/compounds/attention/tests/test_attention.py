@@ -7,6 +7,7 @@ import tensorflow as tf
 from .. import (
     GlobalAttentionPooling1D,
     MultiHeadSelfAttention,
+    MultiHeadAttention,
 )
 
 
@@ -120,3 +121,13 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
             dropped_section = grad_of_output_t[:, t + 1:]
             assert (attended_section != 0.).all()
             assert (dropped_section == 0.).all()
+
+
+def test_multihead_attention(inputs):
+    layer = MultiHeadAttention(units=3, heads=2, output_dim=5)
+
+    encoder_output = tf.placeholder(dtype=tf.float32, shape=[None, 5, 10])
+
+    outputs_tuple = layer([inputs, encoder_output])
+    assert outputs_tuple[0].shape.as_list() == inputs.shape.as_list()[:2] + [layer.output_dim]
+    assert outputs_tuple[1] is encoder_output

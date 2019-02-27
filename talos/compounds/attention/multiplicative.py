@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import tensorflow as tf
 
@@ -30,30 +32,17 @@ class _MultiHeadScaledDotAttention(Model):
             units=self.output_dim,
             use_bias=self.use_bias,
         )  # just for parametrization
-        self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
     @property  # override property
     def input_spec(self):
         return self._input_spec
 
-    def build(self, input_shape):
-        # Reference: https://tunz.kr/post/4
-        # In order to use glorot uniform with fan_out = units instead of units * heads
+    def _get_glorot_uniform_initializer(self, input_shape):
         fan_in, fan_out = input_shape[-1].value, self.units
         limit = np.sqrt(6. / (fan_in + fan_out))  # glorot uniform
-        self.query_layer, self.key_layer, self.value_layer = [
-            tf.keras.layers.Dense(
-                name=name,
-                units=self.units * self.heads,
-                activation=self.activation,
-                use_bias=self.use_bias,
-                kernel_initializer=tf.keras.initializers.uniform(-limit, limit),
-            )
-            for name in ('query_dense', 'key_dense', 'value_dense')
-        ]
-        super().build(input_shape)
+        return tf.keras.initializers.uniform(-limit, limit)
 
-    def _multihead_attention(self, query, key, value, mask):
+    def _multihead_attention(self, query, key, value, mask=None):
         if self.heads > 1:
             # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
             query, key, value = [
@@ -125,6 +114,22 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             use_bias=use_bias,
         )
         self.use_forward_mask = use_forward_mask
+        self._input_spec = tf.keras.layers.InputSpec(ndim=3)
+
+    def build(self, input_shape):
+        # Reference: https://tunz.kr/post/4
+        # In order to use glorot uniform with fan_out = units instead of units * heads
+        self.query_layer, self.key_layer, self.value_layer = [
+            tf.keras.layers.Dense(
+                name=name,
+                units=self.units * self.heads,
+                activation=self.activation,
+                use_bias=self.use_bias,
+                kernel_initializer=self._get_glorot_uniform_initializer(input_shape),
+            )
+            for name in ('query_dense', 'key_dense', 'value_dense')
+        ]
+        super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
         if mask is not None:
@@ -160,3 +165,76 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
         logits = super()._mask_logits(logits, mask)
         return logits
+
+
+class MultiHeadAttention(_MultiHeadScaledDotAttention):
+
+    def __init__(
+            self,
+            units: int,
+            output_dim: int,
+            heads: int = 1,
+            activation: str = None,
+            use_bias: bool = False,
+        ):
+        super().__init__(
+            units=units,
+            output_dim=output_dim,
+            heads=heads,
+            activation=activation,
+            use_bias=use_bias,
+        )
+        self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
+
+    def build(self, input_shape):
+        if len(input_shape) != 2:
+            raise TypeError("both 'inputs' should be length 2 tuple!")
+
+        # Reference: https://tunz.kr/post/4
+        # In order to use glorot uniform with fan_out = units instead of units * heads
+
+        prev_input_shape, encoder_output_shape = input_shape
+        self.query_layer, self.key_layer, self.value_layer = [
+            tf.keras.layers.Dense(
+                name=name,
+                units=self.units * self.heads,
+                activation=self.activation,
+                use_bias=self.use_bias,
+                kernel_initializer=self._get_glorot_uniform_initializer(shape),
+            )
+            for name, shape in zip(
+                ['query_dense', 'key_dense', 'value_dense'],
+                [prev_input_shape, encoder_output_shape, encoder_output_shape],
+            )
+        ]
+        super().build(input_shape)
+
+    def call(
+            self,
+            inputs: Tuple[tf.Tensor, tf.Tensor],
+            mask: Tuple[tf.Tensor, tf.Tensor] = None,
+        ) -> tf.Tensor:
+        if not (len(inputs) == 2):
+            raise TypeError("both 'inputs' and 'mask' should be length 2 tuple!")
+
+        prev_inputs, encoder_outputs = inputs
+
+        query = self.query_layer(prev_inputs)  # shape (N, T', hU)
+        key, value = [
+            layer(encoder_outputs)
+            for layer in (self.key_layer, self.value_layer)
+        ]  # shape (N, T, hU)
+
+        attended_vec = self._multihead_attention(
+            query=query,
+            key=key,
+            value=value,
+        )
+        outputs = self.output_layer(attended_vec)
+        return outputs, encoder_outputs
+
+    def compute_output_shape(self, input_shape):
+        input_shape, encoder_outputs_shape = input_shape
+        output_shape = input_shape.as_list()
+        output_shape[2] = self.output_dim
+        return tf.TensorShape(output_shape), encoder_outputs_shape
