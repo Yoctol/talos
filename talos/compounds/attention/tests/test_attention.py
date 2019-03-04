@@ -6,7 +6,8 @@ import tensorflow as tf
 
 from .. import (
     GlobalAttentionPooling1D,
-    ScaledDotSelfAttention,
+    MultiHeadSelfAttention,
+    MultiHeadAttention,
 )
 
 
@@ -43,6 +44,8 @@ class AttentionTestTemplate(abc.ABC):
         grads = tf.gradients(outputs, inputs)[0]  # same shape as inputs
 
         mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
+        mask_batch[:, :2] = True  # to make sure at least 2 True
+
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grads_batch = sess.run(
             grads,
@@ -78,11 +81,11 @@ class TestGlobalAttentionPooling1D(AttentionTestTemplate):
         assert all(loss.shape.ndims == 0 for loss in losses)
 
 
-class TestScaleDotSelfAttention(AttentionTestTemplate):
+class TestMultiHeadSelfAttention(AttentionTestTemplate):
 
     @pytest.fixture(params=[
-        ScaledDotSelfAttention(units=3, heads=2, output_dim=5),
-        ScaledDotSelfAttention(units=3, heads=1, output_dim=5),
+        MultiHeadSelfAttention(units=3, heads=2, output_dim=5),
+        MultiHeadSelfAttention(units=3, heads=1, output_dim=5),
     ])
     def layer(self, request):
         return request.param
@@ -95,8 +98,8 @@ class TestScaleDotSelfAttention(AttentionTestTemplate):
         assert outputs._keras_mask is masked_inputs._keras_mask
 
     @pytest.mark.parametrize('layer', [
-        ScaledDotSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),
-        ScaledDotSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True),
+        MultiHeadSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),
+        MultiHeadSelfAttention(units=3, heads=1, output_dim=5, use_forward_mask=True),
     ])
     def test_forward_mask_gradients(self, inputs, layer, sess):
         maxlen, channel = inputs.shape.as_list()[1:]
@@ -118,5 +121,69 @@ class TestScaleDotSelfAttention(AttentionTestTemplate):
         for t, grad_of_output_t in enumerate(grad_list_val):
             attended_section = grad_of_output_t[:, :t + 1]
             dropped_section = grad_of_output_t[:, t + 1:]
+            assert (attended_section != 0.).all()
+            assert (dropped_section == 0.).all()
+
+
+class TestMultiHeadAttention:
+
+    @pytest.fixture(scope='class')
+    def kv(self):
+        return tf.placeholder(dtype=tf.float32, shape=[None, 5, 10])
+
+    @pytest.fixture(scope='class')
+    def kv_mask(self):
+        return tf.placeholder(dtype=tf.bool, shape=[None, 5])
+
+    @pytest.fixture(scope='class')
+    def layer(self):
+        return MultiHeadAttention(units=3, heads=2, output_dim=5)
+
+    def test_multihead_attention(self, inputs, kv, layer):
+        outputs = layer([inputs, kv])
+        assert outputs.shape.as_list() == inputs.shape.as_list()[:2] + [layer.output_dim]
+
+    def test_mask_gradients(self, inputs, mask, kv, kv_mask, layer, sess):
+        maxlen, channel = inputs.shape.as_list()[1:]
+        maxlen_encoder, channel_encoder = kv.shape.as_list()[1:]
+
+        outputs = layer(
+            [inputs, kv],
+            mask=[mask, kv_mask],
+        )
+        input_grads, kv_grads = tf.gradients(outputs, [inputs, kv])
+
+        mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
+        kv_mask_batch = np.random.choice(2, size=[5, maxlen_encoder]).astype(np.bool)
+        mask_batch[:, :2] = True  # to make sure at least 2 True
+        kv_mask_batch[:, :2] = True
+
+        sess.run(tf.variables_initializer(var_list=layer.variables))
+        grads_batch, kv_grads_batch = sess.run(
+            [input_grads, kv_grads],
+            feed_dict={
+                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
+                kv: [
+                    np.random.rand(maxlen_encoder, channel_encoder)
+                    for _ in range(5)
+                ],
+                mask: mask_batch,
+                kv_mask: kv_mask_batch,
+            },
+        )
+
+        for mask_sample, grad_sample, kv_mask_sample, kv_grad_sample in zip(
+                mask_batch,
+                grads_batch,
+                kv_mask_batch,
+                kv_grads_batch,
+            ):
+            attended_section = grad_sample[mask_sample]
+            dropped_section = grad_sample[np.logical_not(mask_sample)]
+            assert (attended_section != 0.).all()
+            assert (dropped_section == 0.).all()
+
+            attended_section = kv_grad_sample[kv_mask_sample]
+            dropped_section = kv_grad_sample[np.logical_not(kv_mask_sample)]
             assert (attended_section != 0.).all()
             assert (dropped_section == 0.).all()
