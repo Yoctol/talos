@@ -1,1 +1,4 @@
-from .transformer_block import TransformerBlock
+from .transformer_block import (
+    TransformerBlock,
+    TransformerDecoderBlock,
+)
