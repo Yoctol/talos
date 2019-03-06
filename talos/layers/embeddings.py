@@ -1,3 +1,5 @@
+from typing import Sequence, Union
+
 import numpy as np
 import tensorflow as tf
 
@@ -12,8 +14,8 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_regularizer=None,
             activity_regularizer=None,
             embeddings_constraint=None,
-            mask_index=None,
-            input_length=None,
+            mask_index: Union[int, Sequence[int]] = None,
+            input_length: int = None,
             **kwargs,
         ):
         if 'input_shape' not in kwargs:
@@ -53,6 +55,13 @@ class Embedding(tf.keras.layers.Embedding):
     def _valid_mask_index(self, mask_index):
         if mask_index is None:
             return
+        if isinstance(mask_index, Sequence):
+            for idx in mask_index:
+                self._valid_mask_index_int(idx)
+        else:
+            self._valid_mask_index_int(mask_index)
+
+    def _valid_mask_index_int(self, mask_index):
         if not isinstance(mask_index, int):
             raise ValueError("`mask_index` should be integer!")
         if not (0 <= mask_index < self.input_dim):
@@ -62,7 +71,10 @@ class Embedding(tf.keras.layers.Embedding):
         if self.mask_index is None:
             return None
 
-        return tf.not_equal(inputs, self.mask_index)
+        if isinstance(self.mask_index, int):
+            return tf.not_equal(inputs, self.mask_index)
+
+        return tf.reduce_all([tf.not_equal(inputs, idx) for idx in self.mask_index], axis=0)
 
     def get_config(self):
         config = {
