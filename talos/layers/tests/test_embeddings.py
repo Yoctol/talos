@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from ..embeddings import Embedding
+from talos.networks import Sequential
 
 
 @pytest.fixture(scope='module')
@@ -11,31 +12,43 @@ def inputs():
     return tf.placeholder(tf.int32, shape=[None, 3])
 
 
+@pytest.fixture(scope='module')
+def mask(inputs):
+    return tf.placeholder(tf.bool, shape=inputs.shape)
+
+
 def test_output_shape(inputs):
     embed_layer = Embedding(vocab_size=3, embeddings_dim=5, mask_index=1)
     outputs = embed_layer(inputs)
-    assert outputs.shape.as_list() == [None, 3, 5]
+    maxlen = inputs.shape[1].value
+    assert outputs.shape.as_list() == [None, maxlen, 5]
 
 
 @pytest.mark.parametrize('mask_index', [
     1,
     [1, 2, 3],
 ])
-def test_mask_index(inputs, sess, mask_index):
+def test_mask_index(inputs, mask, sess, mask_index):
     maxlen = inputs.shape[1].value
     embed_layer = Embedding(vocab_size=10, embeddings_dim=5, mask_index=mask_index)
-    outputs = embed_layer(inputs)
+    seq = Sequential([embed_layer])  # to handle mask propagate
+    outputs = seq(inputs, mask=mask)
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
     input_val = np.random.randint(0, embed_layer.vocab_size, size=[5, maxlen])
-    mask_val = sess.run(
+    mask_val = np.random.randint(0, 2, size=[5, maxlen], dtype=np.bool)
+    output_mask_val = sess.run(
         outputs._keras_mask,
-        feed_dict={inputs: input_val},
+        feed_dict={inputs: input_val, mask: mask_val},
     )
     if isinstance(mask_index, int):
-        assert np.array_equal(mask_val, input_val != mask_index)
+        expected_val = input_val != mask_index
     else:
-        assert np.array_equal(mask_val, np.isin(input_val, mask_index, invert=True))  # not in
+        expected_val = np.isin(input_val, mask_index, invert=True)
+
+    expected_val = np.logical_and(mask_val, expected_val)
+
+    assert np.array_equal(output_mask_val, expected_val)
 
 
 @pytest.mark.parametrize('invalid_mask_index', [

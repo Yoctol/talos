@@ -68,17 +68,24 @@ class Embedding(tf.keras.layers.Embedding):
         if not (0 <= mask_index < self.input_dim):
             raise ValueError("`mask_index` should be in range [0, input_dim)!")
 
-    def compute_mask(self, inputs, mask=None):
+    def call(self, inputs, mask=None):
+        return super().call(inputs)
+
+    def compute_mask(self, inputs, mask):
         if self.mask_index is None:
-            return None
+            return mask
 
         if isinstance(self.mask_index, int):
-            return tf.not_equal(inputs, self.mask_index)
+            new_mask = tf.not_equal(inputs, self.mask_index)
+        else:
+            new_mask = tf.reduce_all(
+                [tf.not_equal(inputs, idx) for idx in self.mask_index],
+                axis=0,
+            )
 
-        return tf.reduce_all(
-            [tf.not_equal(inputs, idx) for idx in self.mask_index],
-            axis=0,
-        )
+        if mask is None:
+            return new_mask
+        return tf.logical_and(mask, new_mask)
 
     def get_config(self):
         config = {
