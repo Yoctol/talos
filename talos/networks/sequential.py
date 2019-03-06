@@ -1,7 +1,10 @@
+from tensorflow.python.eager import context
+from tensorflow.python.keras.engine.network import Network
 from tensorflow.python.keras.engine.sequential import Sequential as keras_Sequential
 from tensorflow.python.keras.engine import base_layer
 from tensorflow.python.keras.utils import generic_utils
 from tensorflow.python.training.checkpointable import base as checkpointable
+from tensorflow.python.util import tf_inspect
 
 
 class Sequential(keras_Sequential):
@@ -37,6 +40,33 @@ class Sequential(keras_Sequential):
         self._layers.append(layer)
         if self._layers:
             self._track_layers(self._layers)
+
+    # HACK override: call compute_mask with input tensor not output
+    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/sequential.py#L235-L257
+    def _call_and_compute_mask(self, inputs, training=None, mask=None):
+        if not self.built:
+            self.build(inputs.shape)
+
+        for layer in self.layers:
+            kwargs = {}
+            if 'mask' in tf_inspect.getfullargspec(layer.call).args:
+                kwargs['mask'] = mask
+            if 'training' in tf_inspect.getfullargspec(layer.call).args:
+                kwargs['training'] = training
+
+            if isinstance(layer, Network) and layer._compute_output_and_mask_jointly:
+                outputs, mask = layer._call_and_compute_mask(inputs, **kwargs)
+            else:
+                outputs = layer.call(inputs, **kwargs)
+                if layer.supports_masking:
+                    mask = layer.compute_mask(inputs, mask)
+                else:
+                    mask = None
+            if not context.executing_eagerly():
+                outputs._keras_mask = mask
+            inputs = outputs
+
+        return outputs, mask
 
     # HACK override: fix output._keras_mask setting, and refactor nested block
     # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
