@@ -33,8 +33,7 @@ class Embedding(tf.keras.layers.Embedding):
         self.activity_regularizer = tf.keras.regularizers.get(activity_regularizer)
         self.embeddings_constraint = tf.keras.constraints.get(embeddings_constraint)
 
-        self._valid_mask_index(mask_index)
-        self.mask_index = mask_index
+        self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
 
@@ -52,14 +51,16 @@ class Embedding(tf.keras.layers.Embedding):
             **kwargs,
         )
 
-    def _valid_mask_index(self, mask_index):
+    def _standardize_mask_index(self, mask_index):
         if mask_index is None:
-            return
+            return None
         if isinstance(mask_index, Sequence):
             for idx in mask_index:
                 self._valid_mask_index_int(idx)
-        else:
-            self._valid_mask_index_int(mask_index)
+            return set(mask_index)
+
+        self._valid_mask_index_int(mask_index)
+        return mask_index
 
     def _valid_mask_index_int(self, mask_index):
         if not isinstance(mask_index, int):
@@ -74,7 +75,10 @@ class Embedding(tf.keras.layers.Embedding):
         if isinstance(self.mask_index, int):
             return tf.not_equal(inputs, self.mask_index)
 
-        return tf.reduce_all([tf.not_equal(inputs, idx) for idx in self.mask_index], axis=0)
+        return tf.reduce_all(
+            [tf.not_equal(inputs, idx) for idx in self.mask_index],
+            axis=0,
+        )
 
     def get_config(self):
         config = {
