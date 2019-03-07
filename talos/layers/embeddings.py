@@ -1,3 +1,5 @@
+from typing import Sequence, Union
+
 import numpy as np
 import tensorflow as tf
 
@@ -12,8 +14,8 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_regularizer=None,
             activity_regularizer=None,
             embeddings_constraint=None,
-            mask_index=None,
-            input_length=None,
+            mask_index: Union[int, Sequence[int]] = None,
+            input_length: int = None,
             **kwargs,
         ):
         if 'input_shape' not in kwargs:
@@ -31,8 +33,7 @@ class Embedding(tf.keras.layers.Embedding):
         self.activity_regularizer = tf.keras.regularizers.get(activity_regularizer)
         self.embeddings_constraint = tf.keras.constraints.get(embeddings_constraint)
 
-        self._valid_mask_index(mask_index)
-        self.mask_index = mask_index
+        self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
 
@@ -50,19 +51,41 @@ class Embedding(tf.keras.layers.Embedding):
             **kwargs,
         )
 
-    def _valid_mask_index(self, mask_index):
+    def _standardize_mask_index(self, mask_index):
         if mask_index is None:
-            return
+            return None
+        if isinstance(mask_index, Sequence):
+            for idx in mask_index:
+                self._valid_mask_index_int(idx)
+            return set(mask_index)
+
+        self._valid_mask_index_int(mask_index)
+        return mask_index
+
+    def _valid_mask_index_int(self, mask_index):
         if not isinstance(mask_index, int):
             raise ValueError("`mask_index` should be integer!")
         if not (0 <= mask_index < self.input_dim):
             raise ValueError("`mask_index` should be in range [0, input_dim)!")
 
-    def compute_mask(self, inputs, mask=None):
-        if self.mask_index is None:
-            return None
+    def call(self, inputs, mask=None):
+        return super().call(inputs)
 
-        return tf.not_equal(inputs, self.mask_index)
+    def compute_mask(self, inputs, mask):
+        if self.mask_index is None:
+            return mask
+
+        if isinstance(self.mask_index, int):
+            new_mask = tf.not_equal(inputs, self.mask_index)
+        else:
+            new_mask = tf.reduce_all(
+                [tf.not_equal(inputs, idx) for idx in self.mask_index],
+                axis=0,
+            )
+
+        if mask is None:
+            return new_mask
+        return tf.logical_and(mask, new_mask)
 
     def get_config(self):
         config = {
