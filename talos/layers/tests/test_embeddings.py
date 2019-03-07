@@ -64,9 +64,10 @@ def test_init_from_invalid_mask_index_raise(invalid_mask_index):
         Embedding(vocab_size=5, embeddings_dim=5, mask_index=invalid_mask_index)
 
 
-def test_construct_from_weights(inputs, sess):
+@pytest.mark.parametrize('constant', [False, True])
+def test_construct_from_weights(inputs, sess, constant):
     weights = np.array([[0, 1], [2, 3], [4, 5]], dtype=np.float32)
-    embed_layer = Embedding.from_weights(weights)
+    embed_layer = Embedding.from_weights(weights, constant=constant)
     embed_layer(inputs)  # to build variables
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))

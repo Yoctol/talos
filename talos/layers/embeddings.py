@@ -3,6 +3,8 @@ from typing import Sequence, Union
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.python.keras.utils import tf_utils
+
 
 class Embedding(tf.keras.layers.Embedding):
 
@@ -36,20 +38,45 @@ class Embedding(tf.keras.layers.Embedding):
         self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
+        self.constant = False
+
+    @tf_utils.shape_type_conversion
+    def build(self, input_shape):
+        if self.constant:
+            self.embeddings = tf.constant(self.embeddings_initializer.value)
+        else:
+            self.embeddings = self.add_weight(
+                shape=(self.input_dim, self.output_dim),
+                initializer=self.embeddings_initializer,
+                name='embeddings',
+                regularizer=self.embeddings_regularizer,
+                constraint=self.embeddings_constraint,
+            )
+        self.built = True
 
     @classmethod
-    def from_weights(cls, weights: np.ndarray, mask_index=None, **kwargs):
+    def from_weights(
+            cls,
+            weights: np.ndarray,
+            mask_index: Union[int, Sequence[int]] = None,
+            constant: bool = False,
+            **kwargs,
+        ):
         if weights.ndim != 2:
             raise ValueError(f"`weights` should be a rank 2 array! Recieved shape: {weights.shape}")
-        input_dim, output_dim = weights.shape
+        vocab_size, embeddings_dim = weights.shape
         initializer = tf.constant_initializer(weights)
-        return cls(
-            input_dim,
-            output_dim,
+        layer = cls(
+            vocab_size=vocab_size,
+            embeddings_dim=embeddings_dim,
             embeddings_initializer=initializer,
             mask_index=mask_index,
             **kwargs,
         )
+        if constant:
+            layer.trainable = False
+            layer.constant = True
+        return layer
 
     def _standardize_mask_index(self, mask_index):
         if mask_index is None:
