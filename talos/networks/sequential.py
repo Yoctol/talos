@@ -66,6 +66,7 @@ class Sequential(keras_Sequential):
                 outputs._keras_mask = mask
             inputs = outputs
 
+        outputs = inputs  # to avoid empty self.layers
         return outputs, mask
 
     # HACK override: fix output._keras_mask setting, and refactor nested block

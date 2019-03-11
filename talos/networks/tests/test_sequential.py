@@ -15,10 +15,25 @@ def sequential():
     ])
 
 
-def test_build_sublayers_when_first_called(sequential):
+@pytest.fixture(scope='module')
+def int_inputs():
+    return tf.zeros([2, 3], dtype=tf.int32)
+
+
+@pytest.fixture(scope='module')
+def float_inputs():
+    return tf.ones([5, 4, 3], dtype=tf.float32)
+
+
+def test_empty_sequential(int_inputs, float_inputs):
+    seq = Sequential()
+    assert seq(int_inputs) is int_inputs
+    assert seq(float_inputs) is float_inputs
+
+
+def test_build_sublayers_when_first_called(int_inputs, sequential):
     assert all(not layer.built for layer in sequential.layers)
-    inputs = tf.zeros([1, 3], dtype=tf.float32)
-    sequential(inputs)
+    sequential(int_inputs)
     assert all(layer.built for layer in sequential.layers)
 
 
@@ -28,8 +43,8 @@ def test_context_manager_work_when_first_called(sequential):
     assert len(sequential.variables) == 0
 
     with new_graph.as_default(), tf.variable_scope('scope'):
-        inputs = tf.zeros([1, 3], dtype=tf.float32)
-        sequential(inputs)
+        int_inputs = tf.zeros([2, 3], dtype=tf.int32)
+        sequential(int_inputs)
 
     variables = sequential.variables
     assert len(variables) > 0
@@ -37,17 +52,17 @@ def test_context_manager_work_when_first_called(sequential):
     assert all(var.name.startswith('scope') for var in variables)
 
 
-def test_mask_computed_by_layer_propagate():
+def test_mask_computed_by_layer_propagate(float_inputs):
     sequential_with_masking = Sequential([
         tf.keras.layers.Masking(),
         tf.keras.layers.Dense(5),
     ])
     assert all(layer.supports_masking for layer in sequential_with_masking.layers)
-    outputs = sequential_with_masking(tf.ones([5, 4, 3]))
+    outputs = sequential_with_masking(float_inputs)
     assert outputs._keras_mask is not None
 
 
-def test_mask_given_in_inputs_propagate():
+def test_mask_given_in_inputs_propagate(float_inputs):
     sequential_supports_mask = Sequential([
         tf.keras.layers.Dense(5),
         tf.keras.layers.Dense(5),
@@ -55,14 +70,14 @@ def test_mask_given_in_inputs_propagate():
     assert all(layer.supports_masking for layer in sequential_supports_mask.layers)
     mask = tf.ones([5, 4], dtype=tf.bool)
     outputs = sequential_supports_mask(
-        tf.ones([5, 4, 3]),
+        float_inputs,
         mask=mask,
     )
     assert outputs._keras_mask is mask  # since Dense simply pass it.
 
 
-def test_masked_inputs_propagate():
-    masked_inputs = tf.keras.layers.Masking()(tf.ones([5, 4, 3]))
+def test_masked_inputs_propagate(float_inputs):
+    masked_inputs = tf.keras.layers.Masking()(float_inputs)
     sequential_supports_mask = Sequential([
         tf.keras.layers.Dense(5),
         tf.keras.layers.Dense(5),
