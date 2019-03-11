@@ -15,7 +15,7 @@ class GlobalAttentionPooling1D(Model):
             heads: int = 1,
             activation: str = 'tanh',
             use_bias: bool = False,
-            reg_coeff: float = 0.,
+            heads_reg_coeff: float = None,
             **kwargs,
         ):
         super().__init__()
@@ -31,9 +31,9 @@ class GlobalAttentionPooling1D(Model):
         )
         self.presoftmax_layer = tf.keras.layers.Dense(units=heads)
 
-        if reg_coeff < 0:
+        if heads_reg_coeff is not None and heads_reg_coeff < 0:
             raise ValueError("reg_coeff can't be negative!")
-        self.reg_coeff = reg_coeff
+        self.heads_reg_coeff = heads_reg_coeff
 
         self.supports_masking = True
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
@@ -46,8 +46,6 @@ class GlobalAttentionPooling1D(Model):
         output_dim = input_shape[-1].value
         self.output_layer = tf.keras.layers.Dense(units=output_dim)
         self._input_spec.axes = {2: output_dim}
-        if self.reg_coeff > 0 and self.heads > 1:
-            self.identity_matrix = tf.eye(self.heads)
         super().build(input_shape)
 
     def call(
@@ -65,19 +63,20 @@ class GlobalAttentionPooling1D(Model):
         logits = self._mask_logits(logits, mask)
         weights = tf.nn.softmax(logits, axis=1)  # shape (N, T, h)
 
-        if self.reg_coeff > 0 and self.heads > 1:
-            # shape (N, h, h)
-            weights_product = tf.matmul(weights, weights, transpose_a=True)
-            penalty = self.reg_coeff * tf.reduce_sum(tf.square(
-                weights_product - self.identity_matrix,
-            ), axis=[1, 2])  # shape (N)
-            batch_penalty = tf.reduce_mean(penalty)
-            # NOTE directly call self.add_loss won't work...
-            # keras Model do some complicated check...
-            self.output_layer.add_loss(batch_penalty)
-
         # shape (N, h, input_dim)
         attended_vec = tf.matmul(weights, inputs, transpose_a=True)
+
+        if self.heads_reg_coeff is not None and self.heads > 1:
+            # NOTE add input loss more than once
+            # may cause dependencies error
+            if self.inputs:
+                raise RuntimeError(
+                    "Layer with inputs related regularization "
+                    "should not be called more than once!",
+                )
+            reg_loss = self._disagreement_output_loss(attended_vec)
+            self.output_layer.add_loss(self.heads_reg_coeff * reg_loss)
+
         inputs_dim = inputs.shape[-1].value
         flatten_attended_vec = tf.reshape(attended_vec, [-1, self.heads * inputs_dim])
         outputs = self.output_layer(flatten_attended_vec)
@@ -89,6 +88,18 @@ class GlobalAttentionPooling1D(Model):
             logits -= bias
 
         return logits
+
+    def _disagreement_output_loss(self, attended_vec):
+        unit_head_vec = tf.nn.l2_normalize(
+            attended_vec,
+            axis=-1,
+        )  # shape (N, h, U)
+        cosine_similarity = tf.matmul(
+            unit_head_vec,
+            unit_head_vec,
+            transpose_b=True,
+        )  # shape (N, h, h)
+        return tf.reduce_mean(cosine_similarity)
 
     def compute_output_shape(self, input_shape):
         input_shape = tf.TensorShape(input_shape).as_list()

@@ -18,6 +18,7 @@ class _MultiHeadScaledDotAttention(Model):
             heads: int = 1,
             activation: str = None,
             use_bias: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__()
         self.units = units
@@ -25,6 +26,10 @@ class _MultiHeadScaledDotAttention(Model):
         self.heads = heads
         self.activation = activation
         self.use_bias = use_bias
+
+        if heads_reg_coeff is not None and heads_reg_coeff < 0:
+            raise ValueError("reg_coeff can't be negative!")
+        self.heads_reg_coeff = heads_reg_coeff
 
         self.supports_masking = True
         self.output_layer = tf.keras.layers.Dense(
@@ -62,6 +67,17 @@ class _MultiHeadScaledDotAttention(Model):
         if self.heads > 1:
             # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
             attended_vec = tf.matmul(value, weights, transpose_b=True)
+            if self.heads_reg_coeff is not None:
+                # NOTE add input loss more than once
+                # may cause dependencies error
+                if self.inputs:
+                    raise RuntimeError(
+                        "Layer with inputs related regularization "
+                        "should not be called more than once!",
+                    )
+                reg_loss = self._disagreement_output_loss(attended_vec)
+                self.output_layer.add_loss(self.heads_reg_coeff * reg_loss)
+
             attended_vec = tf.reshape(
                 attended_vec,
                 shape=[-1, self.heads * self.units, attended_vec.shape[-1].value],
@@ -85,6 +101,22 @@ class _MultiHeadScaledDotAttention(Model):
 
         return logits - bias
 
+    def _disagreement_output_loss(self, attended_vec):
+        width = attended_vec.shape[3].value
+        unit_head_vec = tf.nn.l2_normalize(
+            tf.reshape(
+                attended_vec,
+                shape=[-1, self.heads, self.units * width],
+            ),  # shape (N, h, UT')
+            axis=-1,
+        )
+        cosine_similarity = tf.matmul(
+            unit_head_vec,
+            unit_head_vec,
+            transpose_b=True,
+        )  # shape (N, h, h)
+        return tf.reduce_mean(cosine_similarity)
+
 
 class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
@@ -96,6 +128,7 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             activation: str = None,
             use_bias: bool = False,
             use_forward_mask: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__(
             units=units,
@@ -103,6 +136,7 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             heads=heads,
             activation=activation,
             use_bias=use_bias,
+            heads_reg_coeff=heads_reg_coeff,
         )
         self.use_forward_mask = use_forward_mask
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
@@ -178,6 +212,7 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             heads: int = 1,
             activation: str = None,
             use_bias: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__(
             units=units,
@@ -185,6 +220,7 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             heads=heads,
             activation=activation,
             use_bias=use_bias,
+            heads_reg_coeff=heads_reg_coeff,
         )
         self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
 

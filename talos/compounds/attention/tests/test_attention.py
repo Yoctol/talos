@@ -71,14 +71,13 @@ class TestGlobalAttentionPooling1D(AttentionTestTemplate):
         return [inputs.shape[0].value, inputs.shape[2].value]
 
     def test_regularization_losses(self, inputs):
-        layer = GlobalAttentionPooling1D(units=3, heads=4, reg_coeff=1.0)
+        layer = GlobalAttentionPooling1D(units=3, heads=4, heads_reg_coeff=1.0)
 
-        for _ in range(3):
-            layer(inputs)
+        assert not layer.losses
+        layer(inputs)
 
-        losses = layer.losses
-        assert len(losses) == 3  # any input has its reg loss
-        assert all(loss.shape.ndims == 0 for loss in losses)
+        assert len(layer.losses) == 1
+        assert layer.losses[0].shape.ndims == 0
 
 
 class TestMultiHeadSelfAttention(AttentionTestTemplate):
@@ -92,6 +91,15 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
 
     def get_expected_shape(self, layer, inputs):
         return inputs.shape.as_list()[:2] + [layer.output_dim]
+
+    def test_regularization(self, inputs):
+        layer = MultiHeadSelfAttention(units=3, heads=2, output_dim=5, heads_reg_coeff=0.1)
+
+        assert not layer.losses
+        layer(inputs)
+
+        assert len(layer.losses) == 1
+        assert layer.losses[0].shape.ndims == 0
 
     def test_masked_inputs_propagate(self, mocker, masked_inputs, layer):
         outputs = layer(masked_inputs)
