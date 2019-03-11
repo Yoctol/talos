@@ -47,7 +47,7 @@ class _MultiHeadScaledDotAttention(Model):
         limit = np.sqrt(6. / (fan_in + fan_out))  # glorot uniform
         return tf.keras.initializers.uniform(-limit, limit)
 
-    def _multihead_attention(self, query, key, value, mask=None):
+    def _multihead_attention(self, query, key, value, value_mask=None):
         if self.heads > 1:
             # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
             query, key, value = [
@@ -61,7 +61,7 @@ class _MultiHeadScaledDotAttention(Model):
         else:
             logits = tf.matmul(query, key, transpose_b=True)  # shape (N, T', T)
 
-        logits = self._mask_logits(logits / np.sqrt(self.units), mask)
+        logits = self._mask_logits(logits / np.sqrt(self.units), value_mask)
         weights = tf.nn.softmax(logits)  # shape (N, h, T', T) or (N, T', T)
 
         if self.heads > 1:
@@ -164,17 +164,15 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+            query *= mask[:, :, tf.newaxis]
 
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
             value=value,
-            mask=mask,
+            value_mask=mask,
         )
         outputs = self.output_layer(attended_vec)
-
-        if mask is not None:
-            outputs *= mask[:, :, tf.newaxis]
         return outputs
 
     def _mask_logits(self, logits, mask):
@@ -269,17 +267,16 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
         if kv_mask is not None:
             kv_mask = tf.cast(kv_mask, kv.dtype)  # shape (N, T)
 
+        if inputs_mask is not None:
+            query *= tf.cast(inputs_mask, query.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
+
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
             value=value,
-            mask=kv_mask,
+            value_mask=kv_mask,
         )
         outputs = self.output_layer(attended_vec)
-
-        if inputs_mask is not None:
-            outputs *= tf.cast(inputs_mask, outputs.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
-
         return outputs
 
     def compute_mask(self, inputs, mask):

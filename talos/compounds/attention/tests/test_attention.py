@@ -70,14 +70,34 @@ class TestGlobalAttentionPooling1D(AttentionTestTemplate):
     def get_expected_shape(self, layer, inputs):
         return [inputs.shape[0].value, inputs.shape[2].value]
 
-    def test_regularization_losses(self, inputs):
+    def test_regularization_losses(self, inputs, mask, sess):
         layer = GlobalAttentionPooling1D(units=3, heads=4, heads_reg_coeff=1.0)
 
         assert not layer.losses
-        layer(inputs)
+        layer(inputs, mask=mask)
 
         assert len(layer.losses) == 1
         assert layer.losses[0].shape.ndims == 0
+
+        maxlen, channel = inputs.shape.as_list()[1:]
+
+        grad = tf.gradients(layer.losses[0], inputs)[0]  # same shape as inputs
+
+        mask_sample = np.random.choice(2, size=maxlen).astype(np.bool)
+        mask_sample[:2] = True  # to make sure at least 2 True
+
+        sess.run(tf.variables_initializer(var_list=layer.variables))
+        grad_sample = sess.run(
+            grad,
+            feed_dict={
+                inputs: [np.random.rand(maxlen, channel)],
+                mask: [mask_sample],
+            },
+        )[0]
+        attended_section = grad_sample[mask_sample]
+        dropped_section = grad_sample[np.logical_not(mask_sample)]
+        assert (attended_section != 0.).all()
+        assert (dropped_section == 0.).all()
 
 
 class TestMultiHeadSelfAttention(AttentionTestTemplate):
@@ -92,18 +112,38 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
     def get_expected_shape(self, layer, inputs):
         return inputs.shape.as_list()[:2] + [layer.output_dim]
 
-    def test_regularization(self, inputs):
+    def test_masked_inputs_propagate(self, mocker, masked_inputs, layer):
+        outputs = layer(masked_inputs)
+        assert outputs._keras_mask is masked_inputs._keras_mask
+
+    def test_regularization(self, inputs, mask, sess):
         layer = MultiHeadSelfAttention(units=3, heads=2, output_dim=5, heads_reg_coeff=0.1)
 
         assert not layer.losses
-        layer(inputs)
+        layer(inputs, mask=mask)
 
         assert len(layer.losses) == 1
         assert layer.losses[0].shape.ndims == 0
 
-    def test_masked_inputs_propagate(self, mocker, masked_inputs, layer):
-        outputs = layer(masked_inputs)
-        assert outputs._keras_mask is masked_inputs._keras_mask
+        maxlen, channel = inputs.shape.as_list()[1:]
+
+        grad = tf.gradients(layer.losses[0], inputs)[0]  # same shape as inputs
+
+        mask_sample = np.random.choice(2, size=maxlen).astype(np.bool)
+        mask_sample[:2] = True  # to make sure at least 2 True
+
+        sess.run(tf.variables_initializer(var_list=layer.variables))
+        grad_sample = sess.run(
+            grad,
+            feed_dict={
+                inputs: [np.random.rand(maxlen, channel)],
+                mask: [mask_sample],
+            },
+        )[0]
+        attended_section = grad_sample[mask_sample]
+        dropped_section = grad_sample[np.logical_not(mask_sample)]
+        assert (attended_section != 0.).all()
+        assert (dropped_section == 0.).all()
 
     @pytest.mark.parametrize('layer', [
         MultiHeadSelfAttention(units=3, heads=2, output_dim=5, use_forward_mask=True),

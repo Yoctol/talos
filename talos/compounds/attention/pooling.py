@@ -55,8 +55,7 @@ class GlobalAttentionPooling1D(Model):
         ) -> tf.Tensor:
         # shape (N, T, units)
         if mask is not None:
-            mask = tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]  # shape (N, T, 1)
-            inputs *= mask
+            mask = tf.cast(mask, inputs.dtype)
 
         hidden_outputs = self.hidden_layer(inputs)  # shape (N, T, U)
         logits = self.presoftmax_layer(hidden_outputs)  # shape (N, T, h)
@@ -84,8 +83,8 @@ class GlobalAttentionPooling1D(Model):
 
     def _mask_logits(self, logits, mask):
         if mask is not None:
-            bias = (1. - mask) * _LARGE_BIAS  # shape (N, T, 1)
-            logits -= bias
+            bias = (1. - mask) * _LARGE_BIAS  # shape (N, T)
+            logits -= bias[:, :, tf.newaxis]
 
         return logits
 
