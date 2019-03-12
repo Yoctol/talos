@@ -82,8 +82,8 @@ class AttentionTestTemplate(abc.ABC):
             },
         )[0]
         assert np.equal(
-            grad_val != 0.,
-            mask_val[:, np.newaxis],
+            grad_val != 0.,  # shape (N, T, D_in)
+            mask_val[:, np.newaxis],  # shape (N, T, 1)
         ).all()
 
 
@@ -132,7 +132,8 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
         grads_list = tf.stack([
             tf.gradients(outputs[:, t], inputs)[0]
             for t in range(maxlen)
-        ])  # every elements have same shape as inputs
+        ], axis=1)  # every elements have same shape as inputs
+        # shape (N, T, T, U)
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grad_list_val = sess.run(
@@ -140,8 +141,8 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
             feed_dict={inputs: np.random.rand(5, maxlen, channel)},
         )
         assert np.equal(
-            grad_list_val != 0.,
-            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, np.newaxis, :, np.newaxis],
+            grad_list_val != 0.,  # shape (N, T, T, U)
+            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, :, np.newaxis],  # shape (T, T, 1)
         ).all()
 
 
@@ -189,10 +190,10 @@ class TestMultiHeadAttention:
             },
         )
         assert np.equal(
-            inputs_grads_val != 0.,
-            inputs_mask_val[:, :, np.newaxis],
+            inputs_grads_val != 0.,  # shape (N, T, D_in)
+            inputs_mask_val[:, :, np.newaxis],  # shape (N, T, 1)
         ).all()
         assert np.equal(
-            kv_grads_val != 0.,
-            kv_mask_val[:, :, np.newaxis],
+            kv_grads_val != 0.,  # shape (N, T', D_in)
+            kv_mask_val[:, :, np.newaxis],  # shape (N, T', 1)
         ).all()

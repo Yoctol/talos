@@ -38,8 +38,8 @@ class TestTransformerBlock:
             },
         )
         assert np.equal(
-            grad_val != 0.,
-            mask_val[:, :, np.newaxis],
+            grad_val != 0.,  # shape (N, T, D_in)
+            mask_val[:, :, np.newaxis],  # shape (N, T, 1)
         ).all()
 
     def test_forward_mask_gradients(self, inputs, sess):
@@ -50,16 +50,17 @@ class TestTransformerBlock:
         grads_list = tf.stack([
             tf.gradients(outputs[:, t], inputs)[0]
             for t in range(maxlen)
-        ])  # every elements have same shape as inputs
+        ], axis=1)  # every elements have same shape as inputs
+        # shape (N, T, T, U)
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grad_list_val = sess.run(
             grads_list,
-            feed_dict={inputs: np.random.rand(1, maxlen, channel)},
+            feed_dict={inputs: np.random.rand(5, maxlen, channel)},
         )
         assert np.equal(
-            grad_list_val != 0.,
-            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, np.newaxis, :, np.newaxis],
+            grad_list_val != 0.,  # shape (N, T, T, U)
+            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, :, np.newaxis],  # shape (T, T, 1)
         ).all()
 
 
@@ -113,12 +114,12 @@ class TestTransformerDecoderBlock:
             },
         )
         assert np.equal(
-            inputs_grads_val != 0.,
-            inputs_mask_val[:, :, np.newaxis],
+            inputs_grads_val != 0.,  # shape (N, T, D_in)
+            inputs_mask_val[:, :, np.newaxis],  # shape (N, T, 1)
         ).all()
         assert np.equal(
-            encoder_grads_val != 0.,
-            encoder_mask_val[:, :, np.newaxis],
+            encoder_grads_val != 0.,  # shape (N, T', D_in)
+            encoder_mask_val[:, :, np.newaxis],  # shape (N, T', 1)
         ).all()
 
     def test_forward_mask_gradients(self, inputs, encoder_output, sess):
@@ -130,17 +131,18 @@ class TestTransformerDecoderBlock:
         grads_list = tf.stack([
             tf.gradients(outputs[:, t], inputs)[0]
             for t in range(maxlen)
-        ])  # every elements have same shape as inputs
+        ], axis=1)  # every elements have same shape as inputs
+        # shape (N, T, T, U)
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grad_list_val = sess.run(
             grads_list,
             feed_dict={
-                inputs: np.random.rand(1, maxlen, channel),
-                encoder_output: np.random.rand(1, maxlen_encoder, channel_encoder),
+                inputs: np.random.rand(5, maxlen, channel),
+                encoder_output: np.random.rand(5, maxlen_encoder, channel_encoder),
             },
         )
         assert np.equal(
-            grad_list_val != 0.,
-            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, np.newaxis, :, np.newaxis],
+            grad_list_val != 0.,  # shape (N, T, T, U)
+            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, :, np.newaxis],  # shape (T, T, 1)
         ).all()
