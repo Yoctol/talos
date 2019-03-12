@@ -43,22 +43,48 @@ class AttentionTestTemplate(abc.ABC):
         outputs = layer(inputs, mask=mask)
         grads = tf.gradients(outputs, inputs)[0]  # same shape as inputs
 
-        mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
-        mask_batch[:, :2] = True  # to make sure at least 2 True
+        mask_val = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
+        mask_val[:, :2] = True  # to make sure at least 2 True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
-        grads_batch = sess.run(
+        grads_val = sess.run(
             grads,
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
-                mask: mask_batch,
+                inputs: np.random.rand(5, maxlen, channel),
+                mask: mask_val,
             },
         )
-        for mask_sample, grad_sample in zip(mask_batch, grads_batch):
-            attended_section = grad_sample[mask_sample]
-            dropped_section = grad_sample[np.logical_not(mask_sample)]
-            assert (attended_section != 0.).all()
-            assert (dropped_section == 0.).all()
+        assert np.equal(
+            grads_val != 0.,
+            mask_val[:, :, np.newaxis],
+        ).all()
+
+    def test_regularization(self, inputs, mask, layer_with_reg, sess):
+        assert not layer_with_reg.losses
+        layer_with_reg(inputs, mask=mask)
+
+        assert len(layer_with_reg.losses) == 1
+        assert layer_with_reg.losses[0].shape.ndims == 0
+
+        maxlen, channel = inputs.shape.as_list()[1:]
+
+        grad = tf.gradients(layer_with_reg.losses[0], inputs)[0]  # same shape as inputs
+
+        mask_val = np.random.choice(2, size=maxlen).astype(np.bool)
+        mask_val[:2] = True  # to make sure at least 2 True
+
+        sess.run(tf.variables_initializer(var_list=layer_with_reg.variables))
+        grad_val = sess.run(
+            grad,
+            feed_dict={
+                inputs: [np.random.rand(maxlen, channel)],
+                mask: [mask_val],
+            },
+        )[0]
+        assert np.equal(
+            grad_val != 0.,  # shape (N, T, D_in)
+            mask_val[:, np.newaxis],  # shape (N, T, 1)
+        ).all()
 
 
 class TestGlobalAttentionPooling1D(AttentionTestTemplate):
@@ -67,18 +93,12 @@ class TestGlobalAttentionPooling1D(AttentionTestTemplate):
     def layer(self):
         return GlobalAttentionPooling1D(units=3, heads=5)
 
+    @pytest.fixture(scope='class')
+    def layer_with_reg(self):
+        return GlobalAttentionPooling1D(units=3, heads=5, heads_reg_coeff=0.01)
+
     def get_expected_shape(self, layer, inputs):
         return [inputs.shape[0].value, inputs.shape[2].value]
-
-    def test_regularization_losses(self, inputs):
-        layer = GlobalAttentionPooling1D(units=3, heads=4, reg_coeff=1.0)
-
-        for _ in range(3):
-            layer(inputs)
-
-        losses = layer.losses
-        assert len(losses) == 3  # any input has its reg loss
-        assert all(loss.shape.ndims == 0 for loss in losses)
 
 
 class TestMultiHeadSelfAttention(AttentionTestTemplate):
@@ -89,6 +109,10 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
     ])
     def layer(self, request):
         return request.param
+
+    @pytest.fixture(scope='class')
+    def layer_with_reg(self):
+        return MultiHeadSelfAttention(units=3, heads=2, output_dim=5, heads_reg_coeff=0.01)
 
     def get_expected_shape(self, layer, inputs):
         return inputs.shape.as_list()[:2] + [layer.output_dim]
@@ -105,24 +129,21 @@ class TestMultiHeadSelfAttention(AttentionTestTemplate):
         maxlen, channel = inputs.shape.as_list()[1:]
 
         outputs = layer(inputs)
-        grads_list = [
-            tf.gradients(
-                outputs[:, t],
-                inputs,
-            )[0]
+        grads_list = tf.stack([
+            tf.gradients(outputs[:, t], inputs)[0]
             for t in range(maxlen)
-        ]  # every elements have same shape as inputs
+        ], axis=1)  # every elements have same shape as inputs
+        # shape (N, T, T, U)
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
         grad_list_val = sess.run(
             grads_list,
             feed_dict={inputs: np.random.rand(5, maxlen, channel)},
         )
-        for t, grad_of_output_t in enumerate(grad_list_val):
-            attended_section = grad_of_output_t[:, :t + 1]
-            dropped_section = grad_of_output_t[:, t + 1:]
-            assert (attended_section != 0.).all()
-            assert (dropped_section == 0.).all()
+        assert np.equal(
+            grad_list_val != 0.,  # shape (N, T, T, U)
+            np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, :, np.newaxis],  # shape (T, T, 1)
+        ).all()
 
 
 class TestMultiHeadAttention:
@@ -151,39 +172,28 @@ class TestMultiHeadAttention:
             [inputs, kv],
             mask=[mask, kv_mask],
         )
-        input_grads, kv_grads = tf.gradients(outputs, [inputs, kv])
+        inputs_grads, kv_grads = tf.gradients(outputs, [inputs, kv])
 
-        mask_batch = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
-        kv_mask_batch = np.random.choice(2, size=[5, maxlen_encoder]).astype(np.bool)
-        mask_batch[:, :2] = True  # to make sure at least 2 True
-        kv_mask_batch[:, :2] = True
+        inputs_mask_val = np.random.choice(2, size=[5, maxlen]).astype(np.bool)
+        kv_mask_val = np.random.choice(2, size=[5, maxlen_encoder]).astype(np.bool)
+        inputs_mask_val[:, :2] = True  # to make sure at least 2 True
+        kv_mask_val[:, :2] = True
 
         sess.run(tf.variables_initializer(var_list=layer.variables))
-        grads_batch, kv_grads_batch = sess.run(
-            [input_grads, kv_grads],
+        inputs_grads_val, kv_grads_val = sess.run(
+            [inputs_grads, kv_grads],
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
-                kv: [
-                    np.random.rand(maxlen_encoder, channel_encoder)
-                    for _ in range(5)
-                ],
-                mask: mask_batch,
-                kv_mask: kv_mask_batch,
+                inputs: np.random.rand(5, maxlen, channel),
+                kv: np.random.rand(5, maxlen_encoder, channel_encoder),
+                mask: inputs_mask_val,
+                kv_mask: kv_mask_val,
             },
         )
-
-        for mask_sample, grad_sample, kv_mask_sample, kv_grad_sample in zip(
-                mask_batch,
-                grads_batch,
-                kv_mask_batch,
-                kv_grads_batch,
-            ):
-            attended_section = grad_sample[mask_sample]
-            dropped_section = grad_sample[np.logical_not(mask_sample)]
-            assert (attended_section != 0.).all()
-            assert (dropped_section == 0.).all()
-
-            attended_section = kv_grad_sample[kv_mask_sample]
-            dropped_section = kv_grad_sample[np.logical_not(kv_mask_sample)]
-            assert (attended_section != 0.).all()
-            assert (dropped_section == 0.).all()
+        assert np.equal(
+            inputs_grads_val != 0.,  # shape (N, T, D_in)
+            inputs_mask_val[:, :, np.newaxis],  # shape (N, T, 1)
+        ).all()
+        assert np.equal(
+            kv_grads_val != 0.,  # shape (N, T', D_in)
+            kv_mask_val[:, :, np.newaxis],  # shape (N, T', 1)
+        ).all()

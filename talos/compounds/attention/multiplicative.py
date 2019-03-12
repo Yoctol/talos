@@ -18,6 +18,7 @@ class _MultiHeadScaledDotAttention(Model):
             heads: int = 1,
             activation: str = None,
             use_bias: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__()
         self.units = units
@@ -25,6 +26,10 @@ class _MultiHeadScaledDotAttention(Model):
         self.heads = heads
         self.activation = activation
         self.use_bias = use_bias
+
+        if heads_reg_coeff is not None and heads_reg_coeff < 0:
+            raise ValueError("reg_coeff can't be negative!")
+        self.heads_reg_coeff = heads_reg_coeff
 
         self.supports_masking = True
         self.output_layer = tf.keras.layers.Dense(
@@ -42,7 +47,7 @@ class _MultiHeadScaledDotAttention(Model):
         limit = np.sqrt(6. / (fan_in + fan_out))  # glorot uniform
         return tf.keras.initializers.uniform(-limit, limit)
 
-    def _multihead_attention(self, query, key, value, mask=None):
+    def _multihead_attention(self, query, key, value, value_mask=None):
         if self.heads > 1:
             # shape (N, T, hU) -> (N, hU, T) -> (N, h, U, T)
             query, key, value = [
@@ -56,12 +61,23 @@ class _MultiHeadScaledDotAttention(Model):
         else:
             logits = tf.matmul(query, key, transpose_b=True)  # shape (N, T', T)
 
-        logits = self._mask_logits(logits / np.sqrt(self.units), mask)
+        logits = self._mask_logits(logits / np.sqrt(self.units), value_mask)
         weights = tf.nn.softmax(logits)  # shape (N, h, T', T) or (N, T', T)
 
         if self.heads > 1:
             # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
             attended_vec = tf.matmul(value, weights, transpose_b=True)
+            if self.heads_reg_coeff is not None:
+                # NOTE add input loss more than once
+                # may cause dependencies error
+                if self.inputs:
+                    raise RuntimeError(
+                        "Layer with inputs related regularization "
+                        "should not be called more than once!",
+                    )
+                reg_loss = self._disagreement_output_loss(attended_vec)
+                self.output_layer.add_loss(self.heads_reg_coeff * reg_loss)
+
             attended_vec = tf.reshape(
                 attended_vec,
                 shape=[-1, self.heads * self.units, attended_vec.shape[-1].value],
@@ -85,6 +101,22 @@ class _MultiHeadScaledDotAttention(Model):
 
         return logits - bias
 
+    def _disagreement_output_loss(self, attended_vec):
+        width = attended_vec.shape[3].value
+        unit_head_vec = tf.nn.l2_normalize(
+            tf.reshape(
+                attended_vec,
+                shape=[-1, self.heads, self.units * width],
+            ),  # shape (N, h, UT')
+            axis=-1,
+        )
+        cosine_similarity = tf.matmul(
+            unit_head_vec,
+            unit_head_vec,
+            transpose_b=True,
+        )  # shape (N, h, h)
+        return tf.reduce_mean(cosine_similarity)
+
 
 class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
@@ -96,6 +128,7 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             activation: str = None,
             use_bias: bool = False,
             use_forward_mask: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__(
             units=units,
@@ -103,6 +136,7 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
             heads=heads,
             activation=activation,
             use_bias=use_bias,
+            heads_reg_coeff=heads_reg_coeff,
         )
         self.use_forward_mask = use_forward_mask
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
@@ -130,17 +164,15 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+            query *= mask[:, :, tf.newaxis]
 
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
             value=value,
-            mask=mask,
+            value_mask=mask,
         )
         outputs = self.output_layer(attended_vec)
-
-        if mask is not None:
-            outputs *= mask[:, :, tf.newaxis]
         return outputs
 
     def _mask_logits(self, logits, mask):
@@ -178,6 +210,7 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             heads: int = 1,
             activation: str = None,
             use_bias: bool = False,
+            heads_reg_coeff: float = None,
         ):
         super().__init__(
             units=units,
@@ -185,6 +218,7 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
             heads=heads,
             activation=activation,
             use_bias=use_bias,
+            heads_reg_coeff=heads_reg_coeff,
         )
         self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
 
@@ -233,17 +267,16 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
         if kv_mask is not None:
             kv_mask = tf.cast(kv_mask, kv.dtype)  # shape (N, T)
 
+        if inputs_mask is not None:
+            query *= tf.cast(inputs_mask, query.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
+
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
             value=value,
-            mask=kv_mask,
+            value_mask=kv_mask,
         )
         outputs = self.output_layer(attended_vec)
-
-        if inputs_mask is not None:
-            outputs *= tf.cast(inputs_mask, outputs.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
-
         return outputs
 
     def compute_mask(self, inputs, mask):
