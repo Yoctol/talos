@@ -33,7 +33,7 @@ class TestTransformerBlock:
         grad_val = sess.run(
             grads,
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
+                inputs: np.random.rand(5, maxlen, channel),
                 mask: mask_val,
             },
         )
@@ -106,8 +106,8 @@ class TestTransformerDecoderBlock:
         inputs_grads_val, encoder_grads_val = sess.run(
             [inputs_grads, encoder_grads],
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
-                encoder_output: [np.random.rand(maxlen_encoder, channel_encoder) for _ in range(5)],
+                inputs: np.random.rand(5, maxlen, channel),
+                encoder_output: np.random.rand(5, maxlen_encoder, channel_encoder),
                 mask: inputs_mask_val,
                 encoder_output_mask: encoder_mask_val,
             },

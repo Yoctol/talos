@@ -50,7 +50,7 @@ class AttentionTestTemplate(abc.ABC):
         grads_val = sess.run(
             grads,
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
+                inputs: np.random.rand(5, maxlen, channel),
                 mask: mask_val,
             },
         )
@@ -182,12 +182,9 @@ class TestMultiHeadAttention:
         inputs_grads_val, kv_grads_val = sess.run(
             [inputs_grads, kv_grads],
             feed_dict={
-                inputs: [np.random.rand(maxlen, channel) for _ in range(5)],
+                inputs: np.random.rand(5, maxlen, channel),
+                kv: np.random.rand(5, maxlen_encoder, channel_encoder),
                 mask: inputs_mask_val,
-                kv: [
-                    np.random.rand(maxlen_encoder, channel_encoder)
-                    for _ in range(5)
-                ],
                 kv_mask: kv_mask_val,
             },
         )

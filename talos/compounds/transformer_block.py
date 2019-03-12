@@ -17,6 +17,7 @@ class TransformerBlock(Model):
             hidden_units: int = None,
             dropout_rate: float = 0.1,
             use_forward_mask: bool = False,
+            heads_reg_coeff: float = None,
         ):
         """Reference: https://arxiv.org/abs/1706.03762
         """
@@ -26,6 +27,7 @@ class TransformerBlock(Model):
         self.units = units
         self.heads = heads
         self.use_forward_mask = use_forward_mask
+        self.heads_reg_coeff = heads_reg_coeff
 
         if hidden_units is None:
             hidden_units = units * heads * 4  # ratio in paper
@@ -54,6 +56,7 @@ class TransformerBlock(Model):
             heads=self.heads,
             output_dim=output_dim,
             use_forward_mask=self.use_forward_mask,
+            heads_reg_coeff=self.heads_reg_coeff,
         )
         self.output_dense = tf.keras.layers.Dense(
             units=output_dim,
@@ -103,6 +106,7 @@ class TransformerDecoderBlock(Model):
             hidden_units: int = None,
             dropout_rate: float = 0.1,
             use_forward_mask: bool = False,
+            heads_reg_coeff: float = None,
         ):
         """Reference: https://arxiv.org/abs/1706.03762
         """
@@ -112,6 +116,7 @@ class TransformerDecoderBlock(Model):
         self.units = units
         self.heads = heads
         self.use_forward_mask = use_forward_mask
+        self.heads_reg_coeff = heads_reg_coeff
 
         if hidden_units is None:
             hidden_units = units * heads * 4  # ratio in paper
@@ -148,11 +153,13 @@ class TransformerDecoderBlock(Model):
             heads=self.heads,
             output_dim=output_dim,
             use_forward_mask=self.use_forward_mask,
+            heads_reg_coeff=self.heads_reg_coeff,
         )
         self.encoder_decoder_att = MultiHeadAttention(
             units=self.units,
             heads=self.heads,
             output_dim=output_dim,
+            heads_reg_coeff=self.heads_reg_coeff,
         )
         self.output_dense = tf.keras.layers.Dense(
             units=output_dim,
