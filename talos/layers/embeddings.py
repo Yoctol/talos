@@ -38,6 +38,7 @@ class Embedding(tf.keras.layers.Embedding):
         self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
+        self.auxiliary_token = 0
         self._constant = False
 
     @tf_utils.shape_type_conversion
@@ -52,6 +53,19 @@ class Embedding(tf.keras.layers.Embedding):
                 regularizer=self.embeddings_regularizer,
                 constraint=self.embeddings_constraint,
             )
+        if self.auxiliary_token > 0:
+            self.auxiliary_embeddings = self.add_weight(
+                shape=(self.auxiliary_token, self.output_dim),
+                name='auxiliary_embeddings',
+                trainable=True,
+            )
+            self.total_embeddings = tf.concat(
+                [self.embeddings, self.auxiliary_embeddings],
+                axis=0,
+                name='total_embeddings',
+            )
+        else:
+            self.total_embeddings = self.embeddings
         self.built = True
 
     @classmethod
@@ -60,6 +74,7 @@ class Embedding(tf.keras.layers.Embedding):
             weights: np.ndarray,
             mask_index: Union[int, Sequence[int]] = None,
             constant: bool = False,
+            auxiliary_token: int = 0,
             **kwargs,
         ):
         if weights.ndim != 2:
@@ -76,6 +91,7 @@ class Embedding(tf.keras.layers.Embedding):
         if constant:
             layer.trainable = False
             layer._constant = True
+        layer.auxiliary_token = auxiliary_token
         return layer
 
     def _standardize_mask_index(self, mask_index):
@@ -96,7 +112,11 @@ class Embedding(tf.keras.layers.Embedding):
             raise ValueError("`mask_index` should be in range [0, input_dim)!")
 
     def call(self, inputs, mask=None):
-        return super().call(inputs)
+        if inputs.dtype not in (tf.int32, tf.int64):
+            inputs = tf.cast(inputs, tf.int32)
+
+        out = tf.nn.embedding_lookup(self.total_embeddings, inputs)
+        return out
 
     def compute_mask(self, inputs, mask):
         if self.mask_index is None:
@@ -124,5 +144,6 @@ class Embedding(tf.keras.layers.Embedding):
             'embeddings_constraint': tf.keras.constraints.serialize(self.embeddings_constraint),
             'mask_index': self.mask_index,
             'input_length': self.input_length,
+            'auxiliary_token': self.auxiliary_token,
         }
         return config
