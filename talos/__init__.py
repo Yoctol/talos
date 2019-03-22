@@ -1,3 +1,4 @@
+import talos.activations
 import talos.layers
 import talos.networks
 import talos.ops
