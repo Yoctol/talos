@@ -117,6 +117,9 @@ class Embedding(tf.keras.layers.Embedding):
 
         if weights.ndim != 2:
             raise ValueError(f"`weights` should be a rank 2 array! Recieved shape: {weights.shape}")
+        dtype = weights.dtype
+        if dtype not in (np.float32, np.float64):
+            raise ValueError(f'`weights.dtype` should be float!')
         vocab_size, embeddings_dim = weights.shape
         initializer = tf.constant_initializer(weights)
         layer = cls(
@@ -124,6 +127,7 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_dim=embeddings_dim,
             embeddings_initializer=initializer,
             mask_index=mask_index,
+            dtype=dtype,
             **kwargs,
         )
         if constant:
