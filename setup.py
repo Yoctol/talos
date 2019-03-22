@@ -16,7 +16,7 @@ REQUIRED_PACKAGES = [
 
 setup(
     name='talos',
-    version='1.0.8',
+    version='1.0.9',
     description='Powerful Neural Network Builder',
     long_description=long_description,
     python_requires='>=3.6',
