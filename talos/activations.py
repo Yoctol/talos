@@ -20,10 +20,14 @@ def gelu(x):
 # NOTE register functions to keras, then we can get them by string key
 # see the test
 
-functions = {
+local_functions = {
     f"talos.{key}": val
     for key, val in locals().items()
     if callable(val) and val.__module__ == __name__
 }
 
-tf.keras.utils.get_custom_objects().update(functions)
+custom_object = tf.keras.utils.get_custom_objects()
+for key in local_functions.keys():
+    assert key not in custom_object, f"Name conflict! {key} has been defined alreay!"
+
+custom_object.update(local_functions)
