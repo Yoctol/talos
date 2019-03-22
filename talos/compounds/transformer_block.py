@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Callable, Tuple, Union
 
 import tensorflow as tf
 
@@ -14,6 +14,7 @@ class TransformerBlock(Model):
             self,
             units: int,
             heads: int,
+            activation: Union[str, Callable] = 'relu',
             hidden_units: int = None,
             dropout_rate: float = 0.1,
             use_forward_mask: bool = False,
@@ -33,7 +34,7 @@ class TransformerBlock(Model):
             hidden_units = units * heads * 4  # ratio in paper
         self.hidden_dense = tf.keras.layers.Dense(
             units=hidden_units,
-            activation='relu',
+            activation=activation,
             use_bias=True,
         )
         self.ln_self_att, self.ln_ff = [LayerNormalization() for _ in range(2)]
@@ -103,6 +104,7 @@ class TransformerDecoderBlock(Model):
             self,
             units: int,
             heads: int,
+            activation: Union[str, Callable] = 'relu',
             hidden_units: int = None,
             dropout_rate: float = 0.1,
             use_forward_mask: bool = False,
@@ -122,7 +124,7 @@ class TransformerDecoderBlock(Model):
             hidden_units = units * heads * 4  # ratio in paper
         self.hidden_dense = tf.keras.layers.Dense(
             units=hidden_units,
-            activation='relu',
+            activation=activation,
             use_bias=True,
         )
         self.ln_self_att, self.ln_att, self.ln_ff = [LayerNormalization() for _ in range(3)]
