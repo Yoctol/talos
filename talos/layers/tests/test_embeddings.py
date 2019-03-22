@@ -74,7 +74,41 @@ def test_construct_from_weights(inputs, sess, constant):
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
     weights_val = sess.run(embed_layer.embeddings)
 
-    np.testing.assert_array_almost_equal(weights, weights_val)
+    np.testing.assert_array_almost_equal(weights_val, weights)
+
+
+@pytest.mark.parametrize('constant', [False, True])
+def test_auxiliary_token_partially_trainable(inputs, sess, constant):
+    maxlen = inputs.shape[1].value
+    embed_layer = Embedding.from_weights(
+        np.random.uniform(size=[5, 3]).astype(np.float32),
+        constant=constant,
+        trainable=False,
+        auxiliary_token=2,
+    )
+    word_vec = embed_layer(inputs)
+    assert len(embed_layer.trainable_variables) == 1
+    assert len(embed_layer.non_trainable_variables) == (0 if constant else 1)
+    assert len(embed_layer.variables) == (1 if constant else 2)
+
+    update_op = tf.train.GradientDescentOptimizer(0.1).minimize(tf.reduce_sum(word_vec))
+
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
+
+    original_weights_val = sess.run(embed_layer.total_embeddings)
+    sess.run(update_op, feed_dict={inputs: np.random.choice(5 + 2, size=[10, maxlen])})
+    new_weights_val = sess.run(embed_layer.total_embeddings)
+
+    # after update: first 5 row should keep, others should change.
+    np.testing.assert_array_almost_equal(
+        original_weights_val[:5],
+        new_weights_val[:5],
+    )
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_almost_equal(
+            original_weights_val[5:],  # auxiliary tokens
+            new_weights_val[5:],
+        )
 
 
 @pytest.mark.parametrize('invalid_weights', [

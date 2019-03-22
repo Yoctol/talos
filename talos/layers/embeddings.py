@@ -52,13 +52,21 @@ class Embedding(tf.keras.layers.Embedding):
                 name='embeddings',
                 regularizer=self.embeddings_regularizer,
                 constraint=self.embeddings_constraint,
+                trainable=self.trainable,
             )
         if self.auxiliary_token > 0:
+            # HACK, since Layer.add_weight will take
+            # the intersection of trainable (in arg) and self.trainable
+            # manually set self.trainable = True
+            # to make sure auxiliary_embeddings is tracked by backend.
+            original_trainable = self.trainable
+            self.trainable = True
             self.auxiliary_embeddings = self.add_weight(
                 shape=(self.auxiliary_token, self.output_dim),
                 name='auxiliary_embeddings',
                 trainable=True,
             )
+            self.trainable = original_trainable
             self.total_embeddings = tf.concat(
                 [self.embeddings, self.auxiliary_embeddings],
                 axis=0,
@@ -67,6 +75,18 @@ class Embedding(tf.keras.layers.Embedding):
         else:
             self.total_embeddings = self.embeddings
         self.built = True
+
+    @property
+    def trainable_weights(self):
+        # HACK in keras implementation, they consider layer.trainable as well,
+        # be it's ignored in this part.
+        return self._trainable_weights
+
+    @property
+    def non_trainable_weights(self):
+        # HACK in keras implementation, they consider layer.trainable as well,
+        # be it's ignored in this part.
+        return self._non_trainable_weights
 
     @classmethod
     def from_weights(
