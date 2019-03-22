@@ -78,13 +78,13 @@ def test_construct_from_weights(inputs, sess, constant):
 
 
 @pytest.mark.parametrize('constant', [False, True])
-def test_auxiliary_token_partially_trainable(inputs, sess, constant):
+def test_auxiliary_tokens_partially_trainable(inputs, sess, constant):
     maxlen = inputs.shape[1].value
     embed_layer = Embedding.from_weights(
         np.random.uniform(size=[5, 3]).astype(np.float32),
         constant=constant,
         trainable=False,
-        auxiliary_token=2,
+        auxiliary_tokens=2,
     )
     word_vec = embed_layer(inputs)
     assert len(embed_layer.trainable_variables) == 1
@@ -99,11 +99,13 @@ def test_auxiliary_token_partially_trainable(inputs, sess, constant):
     sess.run(update_op, feed_dict={inputs: np.random.choice(5 + 2, size=[10, maxlen])})
     new_weights_val = sess.run(embed_layer.total_embeddings)
 
-    # after update: first 5 row should keep, others should change.
+    # after update:
+    # first 5 row should keep
     np.testing.assert_array_almost_equal(
         original_weights_val[:5],
         new_weights_val[:5],
     )
+    # others (auxiliary tokens) should change.
     with pytest.raises(AssertionError):
         np.testing.assert_array_almost_equal(
             original_weights_val[5:],  # auxiliary tokens
