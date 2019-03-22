@@ -122,10 +122,20 @@ def test_construct_from_invalid_weights_raise(invalid_weights):
         Embedding.from_weights(invalid_weights)
 
 
-def test_freeze(inputs, sess):
+@pytest.mark.parametrize('constant,auxiliary_tokens', [
+    (True, 0),
+    (True, 2),
+    (False, 2),
+])
+def test_freeze_success(inputs, sess, constant, auxiliary_tokens):
     # build graph with constant embedding layer
-    embed_layer = Embedding.from_weights(np.random.rand(5, 10), constant=True)
+    embed_layer = Embedding.from_weights(
+        np.random.rand(5, 10).astype(np.float32),
+        constant=constant,
+        auxiliary_tokens=auxiliary_tokens,
+    )
     outputs = embed_layer(inputs)
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
 
     # freeze graph
     frozen_graph_def = graph_util.convert_variables_to_constants(
@@ -147,10 +157,16 @@ def test_freeze(inputs, sess):
     np.testing.assert_array_almost_equal(outputs_val, new_outputs_val)
 
 
-def test_freeze_fail(inputs, sess):
+@pytest.mark.parametrize('constant,auxiliary_tokens', [
+    (False, 0),  # NOTE only fail in this case
+])
+def test_freeze_fail(inputs, sess, constant, auxiliary_tokens):
     # build graph with variable embedding layer
-    weights = np.array([[0, 1], [2, 3], [4, 5]], dtype=np.float32)
-    embed_layer = Embedding.from_weights(weights, constant=False)
+    embed_layer = Embedding.from_weights(
+        np.random.rand(5, 10).astype(np.float32),
+        constant=constant,
+        auxiliary_tokens=auxiliary_tokens,
+    )
     outputs = embed_layer(inputs)
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
