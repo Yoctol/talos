@@ -74,7 +74,43 @@ def test_construct_from_weights(inputs, sess, constant):
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
     weights_val = sess.run(embed_layer.embeddings)
 
-    np.testing.assert_array_almost_equal(weights, weights_val)
+    np.testing.assert_array_almost_equal(weights_val, weights)
+
+
+@pytest.mark.parametrize('constant', [False, True])
+def test_auxiliary_tokens_partially_trainable(inputs, sess, constant):
+    maxlen = inputs.shape[1].value
+    embed_layer = Embedding.from_weights(
+        np.random.uniform(size=[5, 3]).astype(np.float32),
+        constant=constant,
+        trainable=False,
+        auxiliary_tokens=2,
+    )
+    word_vec = embed_layer(inputs)
+    assert len(embed_layer.trainable_variables) == 1
+    assert len(embed_layer.non_trainable_variables) == (0 if constant else 1)
+    assert len(embed_layer.variables) == (1 if constant else 2)
+
+    update_op = tf.train.GradientDescentOptimizer(0.1).minimize(tf.reduce_sum(word_vec))
+
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
+
+    original_weights_val = sess.run(embed_layer.total_embeddings)
+    sess.run(update_op, feed_dict={inputs: np.random.choice(5 + 2, size=[10, maxlen])})
+    new_weights_val = sess.run(embed_layer.total_embeddings)
+
+    # after update:
+    # first 5 row should keep
+    np.testing.assert_array_almost_equal(
+        original_weights_val[:5],
+        new_weights_val[:5],
+    )
+    # others (auxiliary tokens) should change.
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_almost_equal(
+            original_weights_val[5:],  # auxiliary tokens
+            new_weights_val[5:],
+        )
 
 
 @pytest.mark.parametrize('invalid_weights', [
@@ -86,10 +122,20 @@ def test_construct_from_invalid_weights_raise(invalid_weights):
         Embedding.from_weights(invalid_weights)
 
 
-def test_freeze(inputs, sess):
+@pytest.mark.parametrize('constant,auxiliary_tokens', [
+    (True, 0),
+    (True, 2),
+    (False, 2),
+])
+def test_freeze_success(inputs, sess, constant, auxiliary_tokens):
     # build graph with constant embedding layer
-    embed_layer = Embedding.from_weights(np.random.rand(5, 10), constant=True)
+    embed_layer = Embedding.from_weights(
+        np.random.rand(5, 10).astype(np.float32),
+        constant=constant,
+        auxiliary_tokens=auxiliary_tokens,
+    )
     outputs = embed_layer(inputs)
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
 
     # freeze graph
     frozen_graph_def = graph_util.convert_variables_to_constants(
@@ -111,10 +157,16 @@ def test_freeze(inputs, sess):
     np.testing.assert_array_almost_equal(outputs_val, new_outputs_val)
 
 
-def test_freeze_fail(inputs, sess):
+@pytest.mark.parametrize('constant,auxiliary_tokens', [
+    (False, 0),  # NOTE only fail in this case
+])
+def test_freeze_fail(inputs, sess, constant, auxiliary_tokens):
     # build graph with variable embedding layer
-    weights = np.array([[0, 1], [2, 3], [4, 5]], dtype=np.float32)
-    embed_layer = Embedding.from_weights(weights, constant=False)
+    embed_layer = Embedding.from_weights(
+        np.random.rand(5, 10).astype(np.float32),
+        constant=constant,
+        auxiliary_tokens=auxiliary_tokens,
+    )
     outputs = embed_layer(inputs)
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))

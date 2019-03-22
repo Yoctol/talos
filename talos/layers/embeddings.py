@@ -38,6 +38,7 @@ class Embedding(tf.keras.layers.Embedding):
         self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
+        self.auxiliary_tokens = 0
         self._constant = False
 
     @tf_utils.shape_type_conversion
@@ -51,8 +52,41 @@ class Embedding(tf.keras.layers.Embedding):
                 name='embeddings',
                 regularizer=self.embeddings_regularizer,
                 constraint=self.embeddings_constraint,
+                trainable=self.trainable,
             )
+        if self.auxiliary_tokens > 0:
+            # HACK, since Layer.add_weight will take
+            # the intersection of trainable (in arg) and self.trainable
+            # manually set self.trainable = True
+            # to make sure auxiliary_embeddings is tracked by backend.
+            original_trainable = self.trainable
+            self.trainable = True
+            self.auxiliary_embeddings = self.add_weight(
+                shape=(self.auxiliary_tokens, self.output_dim),
+                name='auxiliary_embeddings',
+                trainable=True,
+            )
+            self.trainable = original_trainable
+            self.total_embeddings = tf.concat(
+                [self.embeddings, self.auxiliary_embeddings],
+                axis=0,
+                name='total_embeddings',
+            )
+        else:
+            self.total_embeddings = self.embeddings
         self.built = True
+
+    @property
+    def trainable_weights(self):
+        # HACK in keras implementation, they consider layer.trainable as well,
+        # be it's ignored in this part.
+        return self._trainable_weights
+
+    @property
+    def non_trainable_weights(self):
+        # HACK in keras implementation, they consider layer.trainable as well,
+        # be it's ignored in this part.
+        return self._non_trainable_weights
 
     @classmethod
     def from_weights(
@@ -60,10 +94,32 @@ class Embedding(tf.keras.layers.Embedding):
             weights: np.ndarray,
             mask_index: Union[int, Sequence[int]] = None,
             constant: bool = False,
+            auxiliary_tokens: int = 0,
             **kwargs,
         ):
+        '''Create a Embedding Layer by pre-defined matrix of shape (vocab_size, dimension).
+
+        Args:
+            weights: numpy array of shape (vocab_size, dimension).
+            mask_index: Which input index would be masked out in output._keras_mask.
+            constant: If True, embeddings would be created as tf.constant instead of tf.Variable.
+            auxiliary_tokens: Number of auxiliary trainable tokens,
+                If > 0, tokens would be added `right after` the weights matrix.
+                Useful when model needs some special tokens but they aren't pre-trained.
+                Make sure these tokens' indices are in [vocab_size, vocab_size + auxiliary_tokens).
+
+        Raises:
+            ValueError: If weights is not a rank 2 matrix.
+
+        Returns:
+            layer: Instance of Embedding Layer.
+        '''
+
         if weights.ndim != 2:
             raise ValueError(f"`weights` should be a rank 2 array! Recieved shape: {weights.shape}")
+        dtype = weights.dtype
+        if dtype not in (np.float32, np.float64):
+            raise ValueError(f'`weights.dtype` should be float!')
         vocab_size, embeddings_dim = weights.shape
         initializer = tf.constant_initializer(weights)
         layer = cls(
@@ -71,11 +127,13 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_dim=embeddings_dim,
             embeddings_initializer=initializer,
             mask_index=mask_index,
+            dtype=dtype,
             **kwargs,
         )
         if constant:
             layer.trainable = False
             layer._constant = True
+        layer.auxiliary_tokens = auxiliary_tokens
         return layer
 
     def _standardize_mask_index(self, mask_index):
@@ -96,7 +154,11 @@ class Embedding(tf.keras.layers.Embedding):
             raise ValueError("`mask_index` should be in range [0, input_dim)!")
 
     def call(self, inputs, mask=None):
-        return super().call(inputs)
+        if inputs.dtype not in (tf.int32, tf.int64):
+            inputs = tf.cast(inputs, tf.int32)
+
+        out = tf.nn.embedding_lookup(self.total_embeddings, inputs)
+        return out
 
     def compute_mask(self, inputs, mask):
         if self.mask_index is None:
@@ -124,5 +186,6 @@ class Embedding(tf.keras.layers.Embedding):
             'embeddings_constraint': tf.keras.constraints.serialize(self.embeddings_constraint),
             'mask_index': self.mask_index,
             'input_length': self.input_length,
+            'auxiliary_tokens': self.auxiliary_tokens,
         }
         return config
