@@ -17,6 +17,20 @@ def gelu(x):
     return x * cdf
 
 
+def gelu_v2(x):
+    """Gaussian Error Linear Unit.
+    This is a smoother version of the RELU.
+    Original paper: https://arxiv.org/abs/1606.08415
+
+    Args:
+        x: float Tensor to perform activation.
+    Returns:
+        `x` with the GELU activation applied.
+
+    """
+    return x * tf.nn.sigmoid(1.702 * x)
+
+
 # NOTE register functions to keras, then we can get them by string key
 # see the test
 
