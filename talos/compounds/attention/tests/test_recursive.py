@@ -45,7 +45,7 @@ def test_mask_gradients(inputs, state, mask, state_mask, cell, sess):
             inputs: np.random.rand(5, maxlen, channel),
             state: np.random.rand(5, maxlen, channel),
             mask: mask_val,
-            state_mask: state_mask_val
+            state_mask: state_mask_val,
         },
     )
     assert np.equal(

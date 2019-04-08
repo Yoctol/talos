@@ -8,6 +8,16 @@ _LARGE_BIAS = 1e4
 
 
 class RelativeAttentionCell(Layer):
+    """Cell class for the RelativeAttention Layer.
+
+    Arguments:
+        units: Positive integer, dimensionality of the feature space.
+        output_dim: Positive integer, dimensionality of the output space.
+        heads: Positive integer, number of heads for attention.
+            Default: 1.
+        use_forward_mask: Bool, whether to mask out future information.
+            Default: False.
+    """
 
     def __init__(
             self,
@@ -26,7 +36,7 @@ class RelativeAttentionCell(Layer):
         self.input_spec = tf.keras.layers.InputSpec(ndim=3)
         self.supports_masking = True
 
-    def build(self, input_shape):
+    def build(self, input_shape: tf.TensorShape):
         fan_in = input_shape[2].value
         self.query_W, self.key_W, self.rel_W, self.value_W = [
             self.add_weight(
@@ -66,6 +76,16 @@ class RelativeAttentionCell(Layer):
             mask: tf.Tensor = None,
             state_mask: tf.Tensor = None,
         ) -> tf.Tensor:
+        """
+        Args:
+            inputs: a float tensor with shape (batch_size, timesteps, input_dim)
+            state: a float tensor with shape (batch_size, timesteps, input_dim)
+            mask: None or a boolean tensor with shape (batch_size, timesteps)
+            state_mask: None or a boolean tensor with shape (batch_size, timesteps)
+
+        Return:
+            a float tensor with shape (batch_size, timesteps, output_dim)
+        """
         concated = tf.concat(
             [tf.stop_gradient(state), inputs],
             axis=1,
@@ -126,6 +146,21 @@ class RelativeAttentionCell(Layer):
         return tf.constant(outputs_np, dtype=tf.float32)  # shape (T', T, D)
 
     def _multihead_attention(self, query, key, value, rel, value_mask=None):
+        """Multihead Attention with Relative Positional Encoding
+
+        We define extended_timesteps = memory_timesteps + timesteps
+
+        Args:
+            query: a float tensor with shape (batch_size, timesteps, heads, units)
+            key: a float tensor with shape (batch_size, extended_timesteps, heads, units)
+            value: a float tensor with shape (batch_size, extended_timesteps, heads, units)
+            rel: a relative positional encoding tensor (heads, units, extended_timesteps, timesteps)
+            value_mask: a boolean tensor with shape (batch_size, heads, 1, timesteps)
+
+        Return:
+            float tensor with shape:  (batch_size, heads, units, memory_timesteps + timesteps)
+
+        """
         # shape (N, T, h, U) -> -> (N, h, U, T)
         query, key, value = [
             tf.transpose(tensor, perm=[0, 2, 3, 1])
@@ -152,6 +187,16 @@ class RelativeAttentionCell(Layer):
         return attended_vec
 
     def _mask_logits(self, logits, mask):
+        """Mask Logits
+
+        Args:
+            logits: a float tensor with shape (batch_size, heads, 1, timesteps)
+            mask: a boolean tensor with shape (batch_size, heads, 1, timesteps)
+
+        Return:
+            a float tensor with shape (batch_size, heads, 1, timesteps)
+
+        """
         if mask is None:
             return logits
 
