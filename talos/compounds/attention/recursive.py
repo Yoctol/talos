@@ -205,15 +205,6 @@ class RelativeAttentionCell(Layer):
             a float tensor with shape (batch_size, heads, timesteps, extended_timesteps)
 
         """
-        if mask is None:
-            return logits
-
-        bias = (1. - mask) * _LARGE_BIAS
-        if self.heads > 1:
-            bias = bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
-        else:
-            bias = bias[:, tf.newaxis, :]  # shape (N, 1, T)
-
         if self.use_forward_mask:
             q_length, kv_length = logits.shape.as_list()[-2:]
             logits -= tf.constant(
@@ -225,7 +216,14 @@ class RelativeAttentionCell(Layer):
             #  [0, 0, 0, 0, 0  , 1e4],
             #  [0, 0, 0, 0, 0  ,   0]]
 
-        return logits - bias
+        if mask is not None:
+            bias = (1. - mask) * _LARGE_BIAS
+            if self.heads > 1:
+                logits -= bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
+            else:
+                logits -= bias[:, tf.newaxis, :]  # shape (N, 1, T)
+
+        return logits
 
     def compute_mask(self, inputs, mask):
         # use same mask

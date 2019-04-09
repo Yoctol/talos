@@ -52,3 +52,28 @@ def test_mask_gradients(inputs, state, mask, state_mask, cell, sess):
         grads_val != 0.,
         mask_val[:, :, np.newaxis],
     ).all()
+
+
+def test_forward_mask_gradients(inputs, state, sess):
+    layer = RelativeAttentionCell(units=3, output_dim=10, heads=5, use_forward_mask=True)
+    maxlen, channel = inputs.shape.as_list()[1:]
+
+    outputs = layer(inputs, state=state)
+    grads_list = tf.stack([
+        tf.gradients(outputs[:, t], inputs)[0]
+        for t in range(maxlen)
+    ], axis=1)  # every elements have same shape as inputs
+    # shape (N, T, T, U)
+
+    sess.run(tf.variables_initializer(var_list=layer.variables))
+    grad_list_val = sess.run(
+        grads_list,
+        feed_dict={
+            inputs: np.random.rand(5, maxlen, channel),
+            state: np.random.rand(5, maxlen, channel),
+        },
+    )
+    assert np.equal(
+        grad_list_val != 0.,  # shape (N, T, T, U)
+        np.tril(np.ones([maxlen, maxlen], dtype=np.bool))[:, :, np.newaxis],  # shape (T, T, 1)
+    ).all(), grad_list_val != 0
