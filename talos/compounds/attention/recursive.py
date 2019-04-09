@@ -52,7 +52,7 @@ class RelativeAttentionCell(Layer):
                 shape=[self.heads, self.units],
                 initializer=tf.truncated_normal_initializer(stddev=np.sqrt(1. / self.units)),
             )
-            for name in ['u_vector', 'u_vector']
+            for name in ['u_vector', 'v_vector']
         ]
         self.output_W = self.add_weight(
             name='output_kernel',
@@ -72,30 +72,38 @@ class RelativeAttentionCell(Layer):
     def call(
             self,
             inputs: tf.Tensor,
-            state: tf.Tensor,
+            state: tf.Tensor = None,
             mask: tf.Tensor = None,
             state_mask: tf.Tensor = None,
         ) -> tf.Tensor:
         """
         Args:
             inputs: a float tensor with shape (batch_size, timesteps, input_dim)
-            state: a float tensor with shape (batch_size, timesteps, input_dim)
+            state: a float tensor with shape (batch_size, memory_timesteps, input_dim)
             mask: None or a boolean tensor with shape (batch_size, timesteps)
-            state_mask: None or a boolean tensor with shape (batch_size, timesteps)
+            state_mask: None or a boolean tensor with shape (batch_size, memory_timesteps)
 
         Return:
             a float tensor with shape (batch_size, timesteps, output_dim)
         """
-        concated = tf.concat(
-            [tf.stop_gradient(state), inputs],
-            axis=1,
-        )
-        if mask is not None and state_mask is not None:
+        if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
-            state_mask = tf.cast(state_mask, inputs.dtype)
-            concated_mask = tf.concat([state_mask, mask], axis=1)
+
+        if state is not None:
+            concated = tf.concat(
+                [tf.stop_gradient(state), inputs],
+                axis=1,
+            )
+            if state_mask is not None:
+                if mask is None:
+                    raise TypeError("Invalid input!")
+                state_mask = tf.cast(state_mask, inputs.dtype)
+                concated_mask = tf.concat([state_mask, mask], axis=1)
+            else:
+                concated_mask = None
         else:
-            concated_mask = None
+            concated = inputs
+            concated_mask = mask
 
         query = tf.tensordot(inputs, self.query_W, axes=[2, 0])
         key, value = [
@@ -107,9 +115,9 @@ class RelativeAttentionCell(Layer):
             query *= mask[:, :, tf.newaxis, tf.newaxis]
 
         rel_pos_matrix = self._get_positional_matrix(
-            query.shape[1].value,
-            key.shape[1].value,
-            inputs.shape[-1].value,
+            q_length=query.shape[1].value,
+            kv_length=key.shape[1].value,
+            fan_in=inputs.shape[-1].value,
         )  # shape (T', T, D)
         rel = tf.tensordot(self.rel_W, rel_pos_matrix, axes=[0, 2])  # shape (h, U, T', T)
 
@@ -155,10 +163,10 @@ class RelativeAttentionCell(Layer):
             key: a float tensor with shape (batch_size, extended_timesteps, heads, units)
             value: a float tensor with shape (batch_size, extended_timesteps, heads, units)
             rel: a relative positional encoding tensor (heads, units, extended_timesteps, timesteps)
-            value_mask: a boolean tensor with shape (batch_size, heads, 1, timesteps)
+            value_mask: a boolean tensor with shape (batch_size, timesteps)
 
         Return:
-            float tensor with shape:  (batch_size, heads, units, memory_timesteps + timesteps)
+            float tensor with shape:  (batch_size, heads, units, timesteps)
 
         """
         # shape (N, T, h, U) -> -> (N, h, U, T)
@@ -190,11 +198,11 @@ class RelativeAttentionCell(Layer):
         """Mask Logits
 
         Args:
-            logits: a float tensor with shape (batch_size, heads, 1, timesteps)
-            mask: a boolean tensor with shape (batch_size, heads, 1, timesteps)
+            logits: a float tensor with shape (batch_size, heads, timesteps, extended_timesteps)
+            mask: a boolean tensor with shape (batch_size, timesteps)
 
         Return:
-            a float tensor with shape (batch_size, heads, 1, timesteps)
+            a float tensor with shape (batch_size, heads, timesteps, extended_timesteps)
 
         """
         if mask is None:
