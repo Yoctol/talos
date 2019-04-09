@@ -84,7 +84,8 @@ class RelativeAttentionCell(Layer):
             state_mask: None or a boolean tensor with shape (batch_size, memory_timesteps)
 
         Return:
-            a float tensor with shape (batch_size, timesteps, output_dim)
+            outputs: a float tensor with shape (batch_size, timesteps, output_dim)
+            state:
         """
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
@@ -133,7 +134,7 @@ class RelativeAttentionCell(Layer):
             self.output_W,
             axes=[[1, 2], [0, 1]],
         )  # shape (N, T', O)
-        return outputs
+        return outputs, inputs, mask, mask
 
     def _get_positional_matrix(self, q_length, kv_length, fan_in, amplitude=1., base=1e4):
         q_range = np.arange(start=0, stop=q_length, dtype=np.float32)  # shape (T',)
