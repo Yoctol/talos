@@ -8,13 +8,12 @@ from ..transformer_xl import TransformerXL
 
 @pytest.fixture(scope='module')
 def layer():
-    return TransformerXL(block_size=2, units=3, output_dim=10, heads=5)
+    return TransformerXL(block_size=2, units=3, heads=5)
 
 
 def test_output_shape(layer, inputs):
-    length = inputs.shape[1].value
     outputs = layer(inputs)
-    assert outputs.shape.as_list() == [None, length, layer.output_dim]
+    assert outputs.shape.as_list() == inputs.shape.as_list()
 
 
 def test_mask_gradients(inputs, mask, layer, sess):
