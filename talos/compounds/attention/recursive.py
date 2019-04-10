@@ -82,7 +82,6 @@ class RelativeAttentionCell(Layer):
             state: a float tensor with shape (batch_size, memory_timesteps, input_dim)
             mask: None or a boolean tensor with shape (batch_size, timesteps)
             state_mask: None or a boolean tensor with shape (batch_size, memory_timesteps)
-
         Return:
             a float tensor with shape (batch_size, timesteps, output_dim)
         """
@@ -119,7 +118,7 @@ class RelativeAttentionCell(Layer):
             kv_length=key.shape[1].value,
             fan_in=inputs.shape[-1].value,
         )  # shape (T', T, D)
-        rel = tf.tensordot(self.rel_W, rel_pos_matrix, axes=[0, 2])  # shape (h, U, T', T)
+        rel = tf.tensordot(rel_pos_matrix, self.rel_W, axes=[2, 0])  # shape (T, t, h, U)
 
         attended_vec = self._multihead_attention(
             query=query,
@@ -131,27 +130,27 @@ class RelativeAttentionCell(Layer):
         outputs = tf.tensordot(
             attended_vec,
             self.output_W,
-            axes=[[1, 2], [0, 1]],
+            axes=[[2, 3], [0, 1]],
         )  # shape (N, T', O)
         return outputs
 
     def _get_positional_matrix(self, q_length, kv_length, fan_in, amplitude=1., base=1e4):
-        q_range = np.arange(start=0, stop=q_length, dtype=np.float32)  # shape (T',)
+        q_range = np.arange(start=0, stop=q_length, dtype=np.float32)  # shape (T,)
         kv_range = np.arange(
             start=q_length - kv_length,
             stop=q_length,
             dtype=np.float32,
         )  # shape (T,)
-        relative_pos = q_range[:, np.newaxis] - kv_range  # shape (T', T)
+        relative_pos = q_range[:, np.newaxis] - kv_range  # shape (T, t)
         dim_range = np.arange(fan_in, dtype=np.float32)  # shape (D,)
         wave_length = np.power(base, 2. * dim_range / fan_in)  # shape (D,)
 
-        offset = (-np.pi / 2.) * ((dim_range + 1) % 2)
-        # [-pi / 2, 0, ...] for convert cos to sin on even dim, shape (D,)
+        offset = (np.pi / 2.) * (dim_range % 2)
+        # [0, pi / 2, ...] for convert sin to cos on odd dim, shape (D,)
 
         theta = relative_pos[:, :, np.newaxis] / wave_length + offset
-        outputs_np = amplitude * np.cos(theta)
-        return tf.constant(outputs_np, dtype=tf.float32)  # shape (T', T, D)
+        outputs_np = amplitude * np.sin(theta)
+        return tf.constant(outputs_np, dtype=tf.float32)  # shape (T, t, D)
 
     def _multihead_attention(self, query, key, value, rel, value_mask=None):
         """Multihead Attention with Relative Positional Encoding
@@ -164,51 +163,42 @@ class RelativeAttentionCell(Layer):
             value: a float tensor with shape (batch_size, extended_timesteps, heads, units)
             rel: a relative positional encoding tensor (heads, units, extended_timesteps, timesteps)
             value_mask: a boolean tensor with shape (batch_size, timesteps)
-
         Return:
             float tensor with shape:  (batch_size, heads, units, timesteps)
-
         """
-        # shape (N, T, h, U) -> -> (N, h, U, T)
-        query, key, value = [
-            tf.transpose(tensor, perm=[0, 2, 3, 1])
-            for tensor in (query, key, value)
-        ]
-        logits = tf.matmul(query, key, transpose_a=True)   # shape (N, h, T', T)
-        logits += tf.einsum(
-            'nhui,huij->nhij',
-            query + self.v[tf.newaxis, :, :, tf.newaxis],  # shape (N, h, U, T')
-            rel,  # shape (h, U, T', T)
-        )
-        logits += tf.reduce_sum(
-            key * self.u[tf.newaxis, :, :, tf.newaxis],
-            axis=2,
-            keepdims=True,
-        )  # shape (N, h, 1, T)
+        # n: batch_size
+        # T: timesteps
+        # t: extended_timesteps
+        # u: units
+        logits = tf.einsum('nThu, nthu -> nTht', query, key)
+        logits += tf.einsum('nThu, Tthu -> nTht', query + self.v, rel)
+        logits += tf.einsum('nthu, hu -> nht', key, self.u)[:, tf.newaxis]  # (n, 1, h, t)
         # TODO, simpler implementation for heads = 1
 
         logits = self._mask_logits(logits / np.sqrt(self.units), value_mask)
-        weights = tf.nn.softmax(logits)  # shape (N, h, T', T) or (N, T', T)
+        weights = tf.nn.softmax(logits)  # shape (N, T, h, t)
 
-        # (N, h, U, T) * (N, h, T, T') -> (N, h, U, T')
-        attended_vec = tf.matmul(value, weights, transpose_b=True)
+        attended_vec = tf.einsum('nTht, nthu -> nThu', weights, value)
         return attended_vec
 
     def _mask_logits(self, logits, mask):
         """Mask Logits
 
         Args:
-            logits: a float tensor with shape (batch_size, heads, timesteps, extended_timesteps)
-            mask: a boolean tensor with shape (batch_size, timesteps)
+            logits: a float tensor with shape (batch_size, timesteps, heads, extended_timesteps)
+            mask: a boolean tensor with shape (batch_size, extended_timesteps)
 
         Return:
-            a float tensor with shape (batch_size, heads, timesteps, extended_timesteps)
+            a float tensor with shape (batch_size, timesteps, heads, extended_timesteps)
 
         """
         if self.use_forward_mask:
-            q_length, kv_length = logits.shape.as_list()[-2:]
+            q_length, _, kv_length = logits.shape.as_list()[1:]
             logits -= tf.constant(
-                np.triu(np.full([q_length, kv_length], _LARGE_BIAS), k=q_length + 1),
+                np.triu(
+                    np.full([q_length, kv_length], _LARGE_BIAS),
+                    k=q_length + 1,
+                )[:, np.newaxis],  # shape (T, 1, t), 1 to broadcast on heads
                 dtype=logits.dtype,
             )
             # example if (q_length, kv_length) = (3, 6)
@@ -218,10 +208,8 @@ class RelativeAttentionCell(Layer):
 
         if mask is not None:
             bias = (1. - mask) * _LARGE_BIAS
-            if self.heads > 1:
-                logits -= bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, T)
-            else:
-                logits -= bias[:, tf.newaxis, :]  # shape (N, 1, T)
+            logits -= bias[:, tf.newaxis, tf.newaxis, :]  # shape (N, 1, 1, t)
+            # TODO, simpler implementation for heads = 1
 
         return logits
 
