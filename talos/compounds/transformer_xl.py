@@ -10,6 +10,23 @@ from .attention import RelativeAttentionCell
 
 class TransformerXL(Model):
 
+    """Transformer-XL: Zihang Dai
+
+    ref: https://arxiv.org/pdf/1901.02860.pdf
+
+    Arguments:
+        block_size (int): The length of segment (L)
+        units (int): The dimensionality of feature space
+                     in each attention cell.
+        heads (int): The number of heads for attention (h)
+        activation (str or callable): Activation function to use.
+                                      Default: hyperbolic tangent (relu).
+        hidden_units (int): Defaults to None.
+        dropout_rate (float): Defaults to 0.1.
+        use_forward_mask (bool): Whether to mask out future information. Defaults to False.
+
+    """
+
     def __init__(
             self,
             block_size: int,
@@ -63,7 +80,18 @@ class TransformerXL(Model):
         super().build(input_shape)
 
     def call(self, inputs, mask: tf.Tensor = None, training: tf.Tensor = None):
-        ln_inputs = self.ln_pre_cell(inputs)
+        """
+        Args:
+            inputs: a float tensor with shape (batch_size, full_timesteps, input_dim).
+            mask: a boolean tensor with shape (batch_size, full_timesteps).
+                  to mask out the information of outputs.
+            training: a boolen tensor. Defaults to None.
+
+        Return:
+            a float tensor with shape (batch_size, full_timesteps, output_dim).
+        """
+
+        ln_inputs = self.ln_pre_cell(inputs)  # layer norm
 
         maxlen = inputs.shape[1].value
         block_size_list = [self.block_size for _ in range(maxlen // self.block_size)]
@@ -93,10 +121,12 @@ class TransformerXL(Model):
         att_vec = tf.concat(output_list, axis=1)
         att_vec = self.dropout_cell(att_vec, training=training)
 
-        outputs = self.ln_pre_ff(att_vec + inputs)
-        outputs = self.hidden_dense(outputs)
-        outputs = self.output_dense(outputs)
-        outputs = self.dropout_ff(outputs, training=training) + att_vec
+        outputs = self.ln_pre_ff(att_vec + inputs)  # layer norm
+
+        # Pointwise Feed Forward
+        outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
+        outputs = self.output_dense(outputs)  # dense layer(output_dim)
+        outputs = self.dropout_ff(outputs, training=training) + att_vec  # res-connect
 
         if mask is not None:
             outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
