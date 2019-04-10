@@ -36,6 +36,9 @@ class RelativeAttentionCell(Layer):
         self.input_spec = tf.keras.layers.InputSpec(ndim=3)
         self.supports_masking = True
 
+        self._computed_rel = {}
+        self._computed_triu = {}
+
     def build(self, input_shape: tf.TensorShape):
         fan_in = input_shape[2].value
         self.query_W, self.key_W, self.rel_W, self.value_W = [
@@ -113,12 +116,11 @@ class RelativeAttentionCell(Layer):
         if mask is not None:
             query *= mask[:, :, tf.newaxis, tf.newaxis]
 
-        rel_pos_matrix = self._get_positional_matrix(
+        rel = self._get_positional_matrix(
             q_length=query.shape[1].value,
             kv_length=key.shape[1].value,
             fan_in=inputs.shape[-1].value,
-        )  # shape (T', T, D)
-        rel = tf.tensordot(rel_pos_matrix, self.rel_W, axes=[2, 0])  # shape (T, t, h, U)
+        )  # shape (T, t, h, U)
 
         attended_vec = self._multihead_attention(
             query=query,
@@ -135,6 +137,9 @@ class RelativeAttentionCell(Layer):
         return outputs
 
     def _get_positional_matrix(self, q_length, kv_length, fan_in, amplitude=1., base=1e4):
+        if (q_length, kv_length) in self._computed_rel:
+            return self._computed_rel[(q_length, kv_length)]
+
         q_range = np.arange(start=0, stop=q_length, dtype=np.float32)  # shape (T,)
         kv_range = np.arange(
             start=q_length - kv_length,
@@ -150,7 +155,11 @@ class RelativeAttentionCell(Layer):
 
         theta = relative_pos[:, :, np.newaxis] / wave_length + offset
         outputs_np = amplitude * np.sin(theta)
-        return tf.constant(outputs_np, dtype=tf.float32)  # shape (T, t, D)
+        sin_wave_matrix = tf.constant(outputs_np, dtype=tf.float32)  # shape (T, t, D)
+
+        rel = tf.tensordot(sin_wave_matrix, self.rel_W, axes=[2, 0])  # shape (T, t, h, U)
+        self._computed_rel[(q_length, kv_length)] = rel
+        return rel
 
     def _multihead_attention(self, query, key, value, rel, value_mask=None):
         """Multihead Attention with Relative Positional Encoding
@@ -194,17 +203,23 @@ class RelativeAttentionCell(Layer):
         """
         if self.use_forward_mask:
             q_length, _, kv_length = logits.shape.as_list()[1:]
-            logits -= tf.constant(
-                np.triu(
-                    np.full([q_length, kv_length], _LARGE_BIAS),
-                    k=q_length + 1,
-                )[:, np.newaxis],  # shape (T, 1, t), 1 to broadcast on heads
-                dtype=logits.dtype,
-            )
-            # example if (q_length, kv_length) = (3, 6)
-            # [[0, 0, 0, 0, 1e4, 1e4],
-            #  [0, 0, 0, 0, 0  , 1e4],
-            #  [0, 0, 0, 0, 0  ,   0]]
+            if (q_length, kv_length) in self._computed_triu:
+                triu_tensor = self._computed_triu[(q_length, kv_length)]
+            else:
+                triu_tensor = tf.constant(
+                    np.triu(
+                        np.full([q_length, kv_length], _LARGE_BIAS),
+                        k=q_length + 1,
+                    )[:, np.newaxis],  # shape (T, 1, t), 1 to broadcast on heads
+                    dtype=logits.dtype,
+                )
+                self._computed_triu[(q_length, kv_length)] = triu_tensor
+                # example if (q_length, kv_length) = (3, 6)
+                # [[0, 0, 0, 0, 1e4, 1e4],
+                #  [0, 0, 0, 0, 0  , 1e4],
+                #  [0, 0, 0, 0, 0  ,   0]]
+
+            logits -= triu_tensor
 
         if mask is not None:
             bias = (1. - mask) * _LARGE_BIAS
