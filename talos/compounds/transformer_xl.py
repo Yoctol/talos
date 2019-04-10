@@ -106,16 +106,23 @@ class TransformerXL(Model):
         return outputs
 
     def _block_wise_attention(self, inputs, mask):
-        # split full_timesteps to blocks with length = self.block_size
+        # split full_timesteps to blocks as possible
+        # with 1 < length <= self.block_size
         maxlen = inputs.shape[1].value
         block_size_list = [self.block_size for _ in range(maxlen // self.block_size)]
         if maxlen % self.block_size != 0:
             block_size_list.append(maxlen % self.block_size)
 
-        block_input_list = tf.split(inputs, block_size_list, axis=1)
+        if len(block_size_list) > 1:
+            block_input_list = tf.split(inputs, block_size_list, axis=1)
+        else:
+            block_input_list = [inputs]
 
         if mask is not None:
-            block_mask_list = tf.split(mask, block_size_list, axis=1)
+            if len(block_size_list) > 1:
+                block_mask_list = tf.split(mask, block_size_list, axis=1)
+            else:
+                block_input_list = [mask]
         else:
             block_mask_list = [None for _ in block_input_list]
 
@@ -133,7 +140,10 @@ class TransformerXL(Model):
             state = block_input
             state_mask = block_mask
 
-        att_vec = tf.concat(output_list, axis=1)
+        if len(output_list) > 1:
+            att_vec = tf.concat(output_list, axis=1)
+        else:
+            att_vec = output_list[0]
         return att_vec
 
     def compute_output_shape(self, input_shape):
