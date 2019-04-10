@@ -14,14 +14,14 @@ class TransformerXL(Model):
 
     ref: https://arxiv.org/pdf/1901.02860.pdf
 
-    Arguments:
+    Args:
         block_size (int): The length of segment (L)
         units (int): The dimensionality of feature space
-                     in each attention cell.
-        heads (int): The number of heads for attention (h)
-        activation (str or callable): Activation function to use.
-                                      Default: hyperbolic tangent (relu).
-        hidden_units (int): Defaults to None.
+            in each attention cell.
+        heads (int): The number of heads for attention (h).
+        activation (str or callable): Activation for hidden position-wise feed forward layer.
+            Default: relu.
+        hidden_units (int): Defaults to `units * heads * 4`.
         dropout_rate (float): Defaults to 0.1.
         use_forward_mask (bool): Whether to mask out future information. Defaults to False.
 

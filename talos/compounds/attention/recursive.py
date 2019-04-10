@@ -8,10 +8,12 @@ _LARGE_BIAS = 1e4
 
 
 class RelativeAttentionCell(Layer):
-    """Cell class for the RelativeAttention Layer.
+    """Layer to perform attention with relative positional encoding on a single block.
+
+    ref: https://arxiv.org/pdf/1901.02860.pdf
 
     Arguments:
-        units: Positive integer, dimensionality of the feature space.
+        units: Positive integer, dimensionality of each heads.
         output_dim: Positive integer, dimensionality of the output space.
         heads: Positive integer, number of heads for attention.
             Default: 1.
