@@ -14,14 +14,14 @@ class TransformerXL(Model):
 
     ref: https://arxiv.org/pdf/1901.02860.pdf
 
-    Arguments:
+    Args:
         block_size (int): The length of segment (L)
         units (int): The dimensionality of feature space
-                     in each attention cell.
-        heads (int): The number of heads for attention (h)
-        activation (str or callable): Activation function to use.
-                                      Default: hyperbolic tangent (relu).
-        hidden_units (int): Defaults to None.
+            in each attention cell.
+        heads (int): The number of heads for attention (h).
+        activation (str or callable): Activation for hidden position-wise feed forward layer.
+            Default: relu.
+        hidden_units (int): Defaults to `units * heads * 4`.
         dropout_rate (float): Defaults to 0.1.
         use_forward_mask (bool): Whether to mask out future information. Defaults to False.
 
@@ -52,7 +52,7 @@ class TransformerXL(Model):
         if 0. < dropout_rate < 1.:
             self.dropout_cell, self.dropout_ff = [Dropout(dropout_rate) for _ in range(2)]
         else:
-            self.dropout_cell = self.dropout_ff = lambda x: x
+            self.dropout_cell = self.dropout_ff = lambda x, training: x
 
         self.block_size = block_size
         self.units = units
@@ -90,17 +90,39 @@ class TransformerXL(Model):
         Return:
             a float tensor with shape (batch_size, full_timesteps, output_dim).
         """
-
+        # RelationAttention SubLayers
         ln_inputs = self.ln_pre_cell(inputs)  # layer norm
+        att_vec = self._block_wise_attention(ln_inputs, mask=mask)
+        att_vec = self.dropout_cell(att_vec, training=training)
 
+        # Position-wise Feed Forward
+        outputs = self.ln_pre_ff(att_vec + inputs)  # layer norm
+        outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
+        outputs = self.output_dense(outputs)  # dense layer(output_dim)
+        outputs = self.dropout_ff(outputs, training=training) + att_vec  # res-connect
+
+        if mask is not None:
+            outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
+        return outputs
+
+    def _block_wise_attention(self, inputs, mask):
+        # split full_timesteps to blocks as possible
+        # with 1 < length <= self.block_size
         maxlen = inputs.shape[1].value
         block_size_list = [self.block_size for _ in range(maxlen // self.block_size)]
         if maxlen % self.block_size != 0:
             block_size_list.append(maxlen % self.block_size)
-        block_input_list = tf.split(ln_inputs, block_size_list, axis=1)
+
+        if len(block_size_list) > 1:
+            block_input_list = tf.split(inputs, block_size_list, axis=1)
+        else:
+            block_input_list = [inputs]
 
         if mask is not None:
-            block_mask_list = tf.split(mask, block_size_list, axis=1)
+            if len(block_size_list) > 1:
+                block_mask_list = tf.split(mask, block_size_list, axis=1)
+            else:
+                block_input_list = [mask]
         else:
             block_mask_list = [None for _ in block_input_list]
 
@@ -118,19 +140,11 @@ class TransformerXL(Model):
             state = block_input
             state_mask = block_mask
 
-        att_vec = tf.concat(output_list, axis=1)
-        att_vec = self.dropout_cell(att_vec, training=training)
-
-        outputs = self.ln_pre_ff(att_vec + inputs)  # layer norm
-
-        # Pointwise Feed Forward
-        outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
-        outputs = self.output_dense(outputs)  # dense layer(output_dim)
-        outputs = self.dropout_ff(outputs, training=training) + att_vec  # res-connect
-
-        if mask is not None:
-            outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
-        return outputs
+        if len(output_list) > 1:
+            att_vec = tf.concat(output_list, axis=1)
+        else:
+            att_vec = output_list[0]
+        return att_vec
 
     def compute_output_shape(self, input_shape):
         return input_shape

@@ -20,18 +20,18 @@ class PositionalEncode(tf.keras.layers.Layer):
         dtype = inputs.dtype
         maxlen, dim = inputs.shape.as_list()[1:]
         pe = self._get_positional_encode_tensor(maxlen, dim, dtype)
-        return inputs + pe[tf.newaxis, :, :]
+        return inputs + pe
 
     def _get_positional_encode_tensor(self, maxlen, dim, dtype):
         position_range = np.arange(maxlen)  # shape [L]
         dim_range = np.arange(dim)  # shape [D]
         wave_length = np.power(self.base, 2. * dim_range / dim)  # shape [D]
 
-        offset = (-np.pi / 2.) * ((dim_range + 1) % 2)
-        # [-pi / 2, 0, ...] for convert sin to cos on even dim, shape [D]
+        offset = (np.pi / 2.) * (dim_range % 2)
+        # [0, pi / 2, ...] for convert sin to cos on odd dim, shape [D]
 
-        theta = position_range[:, np.newaxis] / wave_length[np.newaxis, :] + offset[np.newaxis, :]
-        outputs_np = self.amplitude * np.cos(theta)
+        theta = position_range[:, np.newaxis] / wave_length + offset
+        outputs_np = self.amplitude * np.sin(theta)
         return tf.constant(outputs_np, dtype=dtype)  # shape [L, D]
 
     def compute_output_shape(self, input_shape):

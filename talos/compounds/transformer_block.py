@@ -37,12 +37,12 @@ class TransformerBlock(Model):
             activation=activation,
             use_bias=True,
         )
-        self.ln_self_att, self.ln_ff = [LayerNormalization() for _ in range(2)]
+        self.ln_pre_self_att, self.ln_pre_ff = [LayerNormalization() for _ in range(2)]
 
         if 0. < dropout_rate < 1.:
             self.dropout_self_att, self.dropout_ff = [Dropout(dropout_rate) for _ in range(2)]
         else:
-            self.dropout_self_att = self.dropout_ff = lambda x: x
+            self.dropout_self_att = self.dropout_ff = lambda x, training: x
 
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
@@ -72,19 +72,16 @@ class TransformerBlock(Model):
             mask: tf.Tensor = None,
             training: tf.Tensor = None,
         ) -> tf.Tensor:
-        self_att_vec = self.dropout_self_att(
-            self.self_att(self.ln_self_att(inputs), mask=mask),
-            training=training,
-        )
+        # SelfAttention SubLayers
+        ln_inputs = self.ln_pre_self_att(inputs)
+        self_att_vec = self.self_att(ln_inputs, mask=mask)
+        self_att_vec = self.dropout_self_att(self_att_vec, training=training)
 
-        outputs = self.dropout_ff(
-            self.output_dense(
-                self.hidden_dense(
-                    self.ln_ff(self_att_vec + inputs),
-                ),
-            ),
-            training=training,
-        ) + self_att_vec
+        # Position-wise Feed Forward SubLayers
+        outputs = self.ln_pre_ff(self_att_vec + inputs)  # layer norm
+        outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
+        outputs = self.output_dense(outputs)  # dense layer(output_dim)
+        outputs = self.dropout_ff(outputs, training=training) + self_att_vec  # res-connect
 
         if mask is not None:
             outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
@@ -127,7 +124,10 @@ class TransformerDecoderBlock(Model):
             activation=activation,
             use_bias=True,
         )
-        self.ln_self_att, self.ln_att, self.ln_ff = [LayerNormalization() for _ in range(3)]
+        self.ln_pre_self_att, self.ln_pre_att, self.ln_pre_ff = [
+            LayerNormalization()
+            for _ in range(3)
+        ]
 
         if 0. < dropout_rate < 1.:
             self.dropout_self_att, self.dropout_att, self.dropout_ff = [
@@ -135,7 +135,7 @@ class TransformerDecoderBlock(Model):
                 for _ in range(3)
             ]
         else:
-            self.dropout_self_att = self.dropout_att = self.dropout_ff = lambda x: x
+            self.dropout_self_att = self.dropout_att = self.dropout_ff = lambda x, training: x
 
         self._input_spec = [tf.keras.layers.InputSpec(ndim=3) for _ in range(2)]
 
@@ -168,6 +168,7 @@ class TransformerDecoderBlock(Model):
             use_bias=True,
         )
         self._input_spec[0].axes = {2: output_dim}  # since the res-add-connection
+        self._input_spec[1].axes = {2: encoder_output_shape[-1].value}
         super().build(input_shape_tuple)
 
     def call(
@@ -184,31 +185,24 @@ class TransformerDecoderBlock(Model):
         inputs, encoder_outputs = inputs_tuple
         inputs_mask, encoder_outputs_mask = mask
 
-        self_att_vec = self.dropout_self_att(
-            self.self_att(
-                self.ln_self_att(inputs),
-                mask=inputs_mask,
-            ),
-            training=training,
-        )
+        # SelfAttention SubLayers
+        ln_inputs = self.ln_pre_self_att(inputs)
+        self_att_vec = self.self_att(ln_inputs, mask=inputs_mask)
+        self_att_vec = self.dropout_self_att(self_att_vec, training=training)
 
-        att_vec = self.dropout_att(
-            self.encoder_decoder_att(
-                [self.ln_att(self_att_vec + inputs), encoder_outputs],
-                mask=[inputs_mask, encoder_outputs_mask],
-            ),
-            training=training,
+        # Encoder-Decoder Attention SubLayers
+        att_inputs = self.ln_pre_att(self_att_vec + inputs)
+        att_vec = self.encoder_decoder_att(
+            [att_inputs, encoder_outputs],
+            mask=[inputs_mask, encoder_outputs_mask],
         )
-        # since att will handle masking, multiply the res-part only.
+        att_vec = self.dropout_att(att_vec, training=training)
 
-        outputs = self.dropout_ff(
-            self.output_dense(
-                self.hidden_dense(
-                    self.ln_ff(att_vec + self_att_vec),
-                ),
-            ),
-            training=training,
-        ) + att_vec
+        # Position-wise Feed Forward SubLayers
+        outputs = self.ln_pre_ff(att_vec + self_att_vec)
+        outputs = self.hidden_dense(outputs)
+        outputs = self.output_dense(outputs)
+        outputs = self.dropout_ff(outputs, training=training) + att_vec
 
         if inputs_mask is not None:
             outputs *= tf.cast(inputs_mask, outputs.dtype)[:, :, tf.newaxis]
