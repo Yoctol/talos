@@ -130,12 +130,20 @@ class TransformerXL(Model):
         state_mask = None
         output_list = []
         for block_input, block_mask in zip(block_input_list, block_mask_list):
-            block_output = self.cell(
-                block_input,
-                state=state,
-                mask=block_mask,
-                state_mask=state_mask,
-            )
+            if block_mask is not None:
+                block_output = tf.cond(
+                    tf.reduce_any(block_mask),
+                    lambda: self.cell(
+                        block_input,
+                        state=state,
+                        mask=block_mask,
+                        state_mask=state_mask,
+                    ),
+                    lambda: tf.zeros_like(block_input),
+                )
+            else:
+                block_output = self.cell(block_input, state=state)
+
             output_list.append(block_output)
             state = block_input
             state_mask = block_mask
