@@ -32,6 +32,7 @@ class TransformerXL(Model):
             block_size: int,
             units: int,
             heads: int,
+            state_gradient: bool = False,
             bidirectional: bool = False,
             activation: Union[str, Callable] = 'relu',
             hidden_units: int = None,
@@ -58,6 +59,7 @@ class TransformerXL(Model):
         self.block_size = block_size
         self.units = units
         self.heads = heads
+        self.state_gradient = state_gradient
         self.bidirectional = bidirectional
         self.use_forward_mask = use_forward_mask
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
@@ -169,7 +171,9 @@ class TransformerXL(Model):
                 block_output = cell(block_input, state=state)
 
             output_list.append(block_output)
-            state = tf.stop_gradient(block_input)
+            state = block_input
+            if not self.state_gradient:
+                state = tf.stop_gradient(state)
             state_mask = block_mask
 
         if len(output_list) > 1:
