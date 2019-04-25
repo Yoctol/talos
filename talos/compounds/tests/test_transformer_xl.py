@@ -8,7 +8,7 @@ from ..transformer_xl import TransformerXL
 
 @pytest.fixture(scope='module')
 def layer():
-    return TransformerXL(block_size=2, units=3, heads=5)
+    return TransformerXL(block_size=2, units=3, heads=5, bidirectional=True)
 
 
 def test_output_shape(layer, inputs):
