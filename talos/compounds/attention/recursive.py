@@ -94,10 +94,7 @@ class RelativeAttentionCell(Layer):
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
 
         if state is not None:
-            concated = tf.concat(
-                [tf.stop_gradient(state), inputs],
-                axis=1,
-            )
+            concated = tf.concat([state, inputs], axis=1)
             if state_mask is not None:
                 if mask is None:
                     raise TypeError("Invalid input!")

@@ -145,7 +145,7 @@ class TransformerXL(Model):
                 block_output = self.cell(block_input, state=state)
 
             output_list.append(block_output)
-            state = block_input
+            state = tf.stop_gradient(block_input)
             state_mask = block_mask
 
         if len(output_list) > 1:
