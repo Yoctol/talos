@@ -94,10 +94,7 @@ class RelativeAttentionCell(Layer):
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
 
         if state is not None:
-            concated = tf.concat(
-                [tf.stop_gradient(state), inputs],
-                axis=1,
-            )
+            concated = tf.concat([state, inputs], axis=1)
             if state_mask is not None:
                 if mask is None:
                     raise TypeError("Invalid input!")
@@ -211,15 +208,15 @@ class RelativeAttentionCell(Layer):
                 triu_tensor = tf.constant(
                     np.triu(
                         np.full([q_length, kv_length], _LARGE_BIAS),
-                        k=q_length + 1,
+                        k=kv_length - q_length + 1,
                     )[:, np.newaxis],  # shape (T, 1, t), 1 to broadcast on heads
                     dtype=logits.dtype,
                 )
                 self._computed_triu[(q_length, kv_length)] = triu_tensor
-                # example if (q_length, kv_length) = (3, 6)
-                # [[0, 0, 0, 0, 1e4, 1e4],
-                #  [0, 0, 0, 0, 0  , 1e4],
-                #  [0, 0, 0, 0, 0  ,   0]]
+                # example if (q_length, kv_length) = (3, 5)
+                # [[0, 0, 0, 1e4, 1e4],
+                #  [0, 0, 0, 0,   1e4],
+                #  [0, 0, 0, 0,     0]]
 
             logits -= triu_tensor
 

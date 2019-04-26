@@ -32,6 +32,8 @@ class TransformerXL(Model):
             block_size: int,
             units: int,
             heads: int,
+            state_gradient: bool = False,
+            bidirectional: bool = False,
             activation: Union[str, Callable] = 'relu',
             hidden_units: int = None,
             dropout_rate: float = 0.1,
@@ -57,6 +59,8 @@ class TransformerXL(Model):
         self.block_size = block_size
         self.units = units
         self.heads = heads
+        self.state_gradient = state_gradient
+        self.bidirectional = bidirectional
         self.use_forward_mask = use_forward_mask
         self._input_spec = tf.keras.layers.InputSpec(ndim=3)
 
@@ -72,6 +76,13 @@ class TransformerXL(Model):
             heads=self.heads,
             use_forward_mask=self.use_forward_mask,
         )
+        if self.bidirectional:
+            self.backward_cell = RelativeAttentionCell(
+                units=self.units,
+                output_dim=output_dim,
+                heads=self.heads,
+                use_forward_mask=self.use_forward_mask,
+            )
         self.output_dense = tf.keras.layers.Dense(
             units=output_dim,
             use_bias=True,
@@ -92,7 +103,22 @@ class TransformerXL(Model):
         """
         # RelationAttention SubLayers
         ln_inputs = self.ln_pre_cell(inputs)  # layer norm
-        att_vec = self._block_wise_attention(ln_inputs, mask=mask)
+        att_vec = self._blockwise_attention(ln_inputs, mask=mask, cell=self.cell)
+        if self.bidirectional:
+            if mask is not None:
+                backward_mask = tf.reverse(mask, axis=[1])
+            else:
+                backward_mask = None
+            backward_vec = tf.reverse(
+                self._blockwise_attention(
+                    tf.reverse(ln_inputs, axis=[1]),
+                    mask=backward_mask,
+                    cell=self.backward_cell,
+                ),
+                axis=[1],
+            )
+            att_vec = att_vec + backward_vec
+
         att_vec = self.dropout_cell(att_vec, training=training)
 
         # Position-wise Feed Forward
@@ -105,7 +131,7 @@ class TransformerXL(Model):
             outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
         return outputs
 
-    def _block_wise_attention(self, inputs, mask):
+    def _blockwise_attention(self, inputs, mask, cell):
         # split full_timesteps to blocks as possible
         # with 1 < length <= self.block_size
         maxlen = inputs.shape[1].value
@@ -133,7 +159,7 @@ class TransformerXL(Model):
             if block_mask is not None:
                 block_output = tf.cond(
                     tf.reduce_any(block_mask),
-                    lambda: self.cell(
+                    lambda: cell(
                         block_input,
                         state=state,
                         mask=block_mask,
@@ -142,10 +168,12 @@ class TransformerXL(Model):
                     lambda: tf.zeros_like(block_input),
                 )
             else:
-                block_output = self.cell(block_input, state=state)
+                block_output = cell(block_input, state=state)
 
             output_list.append(block_output)
             state = block_input
+            if not self.state_gradient:
+                state = tf.stop_gradient(state)
             state_mask = block_mask
 
         if len(output_list) > 1:
