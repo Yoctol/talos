@@ -75,10 +75,10 @@ class TransformerBlock(Model):
         # SelfAttention SubLayers
         ln_inputs = self.ln_pre_self_att(inputs)
         self_att_vec = self.self_att(ln_inputs, mask=mask)
-        self_att_vec = self.dropout_self_att(self_att_vec, training=training)
+        self_att_vec = self.dropout_self_att(self_att_vec, training=training) + inputs
 
         # Position-wise Feed Forward SubLayers
-        outputs = self.ln_pre_ff(self_att_vec + inputs)  # layer norm
+        outputs = self.ln_pre_ff(self_att_vec)  # layer norm
         outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
         outputs = self.output_dense(outputs)  # dense layer(output_dim)
         outputs = self.dropout_ff(outputs, training=training) + self_att_vec  # res-connect
@@ -188,18 +188,18 @@ class TransformerDecoderBlock(Model):
         # SelfAttention SubLayers
         ln_inputs = self.ln_pre_self_att(inputs)
         self_att_vec = self.self_att(ln_inputs, mask=inputs_mask)
-        self_att_vec = self.dropout_self_att(self_att_vec, training=training)
+        self_att_vec = self.dropout_self_att(self_att_vec, training=training) + inputs
 
         # Encoder-Decoder Attention SubLayers
-        att_inputs = self.ln_pre_att(self_att_vec + inputs)
+        att_inputs = self.ln_pre_att(self_att_vec)
         att_vec = self.encoder_decoder_att(
             [att_inputs, encoder_outputs],
             mask=[inputs_mask, encoder_outputs_mask],
         )
-        att_vec = self.dropout_att(att_vec, training=training)
+        att_vec = self.dropout_att(att_vec, training=training) + self_att_vec
 
         # Position-wise Feed Forward SubLayers
-        outputs = self.ln_pre_ff(att_vec + self_att_vec)
+        outputs = self.ln_pre_ff(att_vec)
         outputs = self.hidden_dense(outputs)
         outputs = self.output_dense(outputs)
         outputs = self.dropout_ff(outputs, training=training) + att_vec
