@@ -119,10 +119,10 @@ class TransformerXL(Model):
             )
             att_vec = att_vec + backward_vec
 
-        att_vec = self.dropout_cell(att_vec, training=training)
+        att_vec = self.dropout_cell(att_vec, training=training) + inputs
 
         # Position-wise Feed Forward
-        outputs = self.ln_pre_ff(att_vec + inputs)  # layer norm
+        outputs = self.ln_pre_ff(att_vec)  # layer norm
         outputs = self.hidden_dense(outputs)  # dense layer(hidden units)
         outputs = self.output_dense(outputs)  # dense layer(output_dim)
         outputs = self.dropout_ff(outputs, training=training) + att_vec  # res-connect
