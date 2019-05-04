@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 import tensorflow as tf
 
+from talos.compounds import TransformerBlock
 from talos.layers import (
     Bidirectional,
     Conv1D,
@@ -20,7 +21,7 @@ from talos.networks import Sequential
 from ..spectral_norm import add_spectral_norm
 
 
-@pytest.mark.parametrize('layer,inputs', [
+@pytest.mark.parametrize('layer, inputs', [
     (Dense(10), tf.zeros([3, 4])),
     (Conv1D(filters=10, kernel_size=3), tf.zeros([3, 4, 5])),
     (Conv2D(filters=10, kernel_size=3), tf.zeros([3, 4, 5, 5])),
@@ -37,6 +38,7 @@ from ..spectral_norm import add_spectral_norm
         LSTMCell(5),
     ])), tf.zeros([3, 4, 5])),
     (Bidirectional(LSTM(10)), tf.zeros([3, 4, 5])),
+    (TransformerBlock(5, heads=4), tf.zeros([3, 4, 5])),
 ])
 def test_spectral_norm_for_layer(layer, inputs, sess):
     add_spectral_norm(layer)
@@ -70,7 +72,7 @@ def test_spectral_norm_for_layer(layer, inputs, sess):
 
 
 def recursive_get_kernel_attributes(layer):
-    if isinstance(layer, tf.keras.Sequential):
+    if isinstance(layer, tf.keras.Model):
         return list(chain.from_iterable([
             recursive_get_kernel_attributes(layer)
             for layer in layer.layers
