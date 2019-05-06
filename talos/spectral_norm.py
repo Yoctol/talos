@@ -10,6 +10,8 @@ def add_spectral_norm(layer: tf.layers.Layer):
     if isinstance(layer, tf.keras.Sequential):
         for sub_layer in layer.layers:
             add_spectral_norm(sub_layer)
+    elif isinstance(layer, tf.keras.Model):
+        add_spectral_norm_for_model(layer)
     elif isinstance(layer, tf.keras.layers.RNN):
         add_spectral_norm(layer.cell)
     elif isinstance(layer, tf.keras.layers.StackedRNNCells):
@@ -72,6 +74,21 @@ def add_spectral_norm_for_layer(
         return normed_kernel
 
     layer.add_weight = types.MethodType(new_add_weight, layer)
+
+
+def add_spectral_norm_for_model(model: tf.keras.Model):
+    if model.built:
+        raise ValueError("Can't add spectral norm on built layer!")
+
+    original_build = model.build
+
+    # Very Very Evil HACK
+    def new_build(self, input_shape):
+        original_build(input_shape)
+        for sub_layer in self.layers:
+            add_spectral_norm(sub_layer)
+
+    model.build = types.MethodType(new_build, model)
 
 
 def to_rank2(tensor: tf.Tensor):
