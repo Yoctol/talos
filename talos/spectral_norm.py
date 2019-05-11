@@ -53,22 +53,33 @@ def add_spectral_norm_for_layer(
         kernel_matrix = to_rank2(kernel)  # shape (U, V)
 
         u_vector = original_add_weight(
-            name=f'{name}/singular_vector',
+            name=f'{name}/left_singular_vector',
             shape=(kernel_matrix.shape[0].value, 1),
             initializer=tf.keras.initializers.lecun_normal(),  # unit vector
             trainable=False,
             dtype=kernel.dtype,
         )  # shape (U, 1)
-        v_vector = tf.matmul(kernel_matrix, u_vector, transpose_a=True)  # shape (V, 1)
-        spectral_norm = tf.norm(v_vector)  # shape (1)
+
+        new_v = tf.matmul(kernel_matrix, u_vector, transpose_a=True)  # shape (V, 1)
+        new_v = tf.stop_gradient(
+            tf.nn.l2_normalize(new_v, axis=0),
+            name=f'{name}/new_right_singular_vector',
+        )
+        new_u = kernel_matrix @ new_v  # shape (U, 1)
+        new_u = tf.stop_gradient(
+            tf.nn.l2_normalize(new_u, axis=0),
+            name=f'{name}/new_left_singular_vector',
+        )
+        spectral_norm = tf.squeeze(
+            tf.matmul(new_u, kernel_matrix, transpose_a=True) @ new_v,
+            name=f'{name}/singular_value',
+        )
         normed_kernel = tf.truediv(
             kernel,
             spectral_norm + tf.keras.backend.epsilon(),
             name=f'{name}_sn',
         )
-
-        new_u = tf.nn.l2_normalize(kernel_matrix @ v_vector, axis=0)  # shape (U, 1)
-        update_u = tf.assign(u_vector, new_u, name=f'{name}_sn/power_iter')
+        update_u = tf.assign(u_vector, new_u, name=f'{name}/power_iter')
         self.add_update(update_u)
 
         return normed_kernel
