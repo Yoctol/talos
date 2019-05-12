@@ -60,18 +60,17 @@ def add_spectral_norm_for_layer(
             dtype=kernel.dtype,
         )  # shape (U, 1)
 
-        new_v = tf.matmul(kernel_matrix, u_vector, transpose_a=True)  # shape (V, 1)
         new_v = tf.stop_gradient(
-            tf.nn.l2_normalize(new_v, axis=0),
+            tf.nn.l2_normalize(tf.matmul(kernel_matrix, u_vector, transpose_a=True)),
             name=f'{name}/new_right_singular_vector',
-        )
-        new_u = kernel_matrix @ new_v  # shape (U, 1)
+        )  # shape (V, 1)
+        unnormed_new_u = kernel_matrix @ new_v  # shape (U, 1)
         new_u = tf.stop_gradient(
-            tf.nn.l2_normalize(new_u, axis=0),
+            tf.nn.l2_normalize(unnormed_new_u),
             name=f'{name}/new_left_singular_vector',
         )
         spectral_norm = tf.squeeze(
-            tf.matmul(new_u, kernel_matrix, transpose_a=True) @ new_v,
+            tf.matmul(new_u, unnormed_new_u, transpose_a=True),
             name=f'{name}/singular_value',
         )
         normed_kernel = tf.truediv(
