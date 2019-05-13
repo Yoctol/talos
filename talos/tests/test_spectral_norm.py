@@ -21,6 +21,32 @@ from talos.networks import Sequential
 from ..spectral_norm import add_spectral_norm
 
 
+def test_grad_value(sess):
+    x = tf.random_normal([3, 5])
+    layer = Dense(10, use_bias=False)
+    add_spectral_norm(layer)
+    y = layer(x)
+
+    W = layer.trainable_variables[0]
+    W_sn = layer.kernel
+    dW, dW_sn = tf.gradients(y, [W, W_sn])
+
+    graph = sess.graph
+    sn = graph.get_tensor_by_name(f'{W.op.name}/singular_value:0')
+    # use the value after updated
+    new_u = graph.get_tensor_by_name(f'{W.op.name}/new_left_singular_vector:0')
+    new_v = graph.get_tensor_by_name(f'{W.op.name}/new_right_singular_vector:0')
+
+    sess.run(tf.variables_initializer(layer.variables))
+    dW_val, dW_sn_val, W_sn_val, sn_val, u, v = sess.run([
+        dW, dW_sn, W_sn, sn, new_u, new_v])
+
+    eps = tf.keras.backend.epsilon()
+    # Formula Reference: https://hackmd.io/HHWrnmbWSXKb_DIFmHKtAA
+    expected_dW = (dW_sn_val - u * v[:, 0] * np.sum(W_sn_val * dW_sn_val)) / (sn_val + eps)
+    np.testing.assert_array_almost_equal(dW_val, expected_dW, decimal=4)
+
+
 @pytest.mark.parametrize('layer, inputs', [
     (Dense(10), tf.zeros([3, 4])),
     (Conv1D(filters=10, kernel_size=3), tf.zeros([3, 4, 5])),
@@ -40,7 +66,7 @@ from ..spectral_norm import add_spectral_norm
     (Bidirectional(LSTM(10)), tf.zeros([3, 4, 5])),
     (TransformerBlock(5, heads=4), tf.zeros([3, 4, 5])),
 ])
-def test_spectral_norm_for_layer(layer, inputs, sess):
+def test_add_spectral_norm(layer, inputs, sess):
     add_spectral_norm(layer)
     if hasattr(layer, 'state_size'):
         state = layer.get_initial_state(inputs)
