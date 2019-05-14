@@ -22,6 +22,7 @@ class Conv1DTranspose(Conv1D):
             kernel_size,
             strides=1,
             padding='valid',
+            output_padding=None,
             data_format=None,
             activation=None,
             use_bias=True,
@@ -51,6 +52,17 @@ class Conv1DTranspose(Conv1D):
             bias_constraint=constraints.get(bias_constraint),
             **kwargs,
         )
+        self.output_padding = output_padding
+        if self.output_padding is not None:
+            self.output_padding = conv_utils.normalize_tuple(
+                self.output_padding, 1, 'output_padding',
+            )
+            for stride, out_pad in zip(self.strides, self.output_padding):
+                if out_pad >= stride:
+                    raise ValueError(
+                        f'Stride {self.strides} must be greater than '
+                        f'output padding {self.output_padding}',
+                    )
 
     def build(self, input_shape):
         input_shape = tensor_shape.TensorShape(input_shape)
@@ -95,47 +107,46 @@ class Conv1DTranspose(Conv1D):
         inputs_shape = array_ops.shape(inputs)
         batch_size = inputs_shape[0]
         if self.data_format == 'channels_first':
-            c_axis, w_axis = 1, 2
+            w_axis = 2
         else:
-            c_axis, w_axis = 2, 1
+            w_axis = 1
 
         width = inputs_shape[w_axis]
-        kernel_w = self.kernel_size[0]
-        stride_w = self.strides[0]
+        kernel_w, = self.kernel_size
+        stride_w, = self.strides
+
+        if self.output_padding is None:
+            out_pad_w = None
+        else:
+            out_pad_w, = self.output_padding
 
         # Infer the dynamic output shape:
         out_width = conv_utils.deconv_output_length(
             width,
             kernel_w,
-            self.padding,
-            stride_w,
+            padding=self.padding,
+            output_padding=out_pad_w,
+            stride=stride_w,
+            dilation=self.dilation_rate[0],
         )
         if self.data_format == 'channels_first':
             output_shape = (batch_size, self.filters, out_width)
         else:
             output_shape = (batch_size, out_width, self.filters)
-        strides = stride_w
 
         output_shape_tensor = array_ops.stack(output_shape)
         outputs = conv1d_transpose(
             inputs,
             self.kernel,
             output_shape_tensor,
-            strides,
+            stride=stride_w,
             padding=self.padding.upper(),
             data_format=conv_utils.convert_data_format(self.data_format, ndim=3),
         )
 
         if not context.executing_eagerly():
             # Infer the static output shape:
-            out_shape = inputs.get_shape().as_list()
-            out_shape[c_axis] = self.filters
-            out_shape[w_axis] = conv_utils.deconv_output_length(
-                out_shape[w_axis],
-                kernel_w,
-                self.padding,
-                stride_w,
-            )
+            out_shape = self.compute_output_shape(inputs.shape)
             outputs.set_shape(out_shape)
 
         if self.use_bias:
@@ -157,10 +168,21 @@ class Conv1DTranspose(Conv1D):
         else:
             c_axis, w_axis = 2, 1
 
-        kernel_w = self.kernel_size[0]
-        stride_w = self.strides[0]
+        kernel_w, = self.kernel_size
+        stride_w, = self.strides
+
+        if self.output_padding is None:
+            out_pad_w = None
+        else:
+            out_pad_w, = self.output_padding
 
         output_shape[c_axis] = self.filters
         output_shape[w_axis] = conv_utils.deconv_output_length(
-            output_shape[w_axis], kernel_w, self.padding, stride_w)
+            output_shape[w_axis],
+            kernel_w,
+            padding=self.padding,
+            output_padding=out_pad_w,
+            stride=stride_w,
+            dilation=self.dilation_rate[0],
+        )
         return tensor_shape.TensorShape(output_shape)

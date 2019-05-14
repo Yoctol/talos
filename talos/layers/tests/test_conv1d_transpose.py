@@ -28,7 +28,7 @@ def test_output_shape(inputs, padding):
     elif padding == 'same':
         expected_shape = [None, width, filters]
     else:
-        assert False  # invalid parametrize!!!!
+        raise AssertionError("Invalid parametrize!")
 
     assert outputs.shape.as_list() \
         == dconv1d.compute_output_shape(inputs.shape).as_list() \
@@ -66,7 +66,7 @@ def test_output_value(inputs, padding, sess):
             [[[0.], [3.], [3.]]],
         ], axis=0)
     else:
-        assert False  # invalid parametrize!!!!
+        raise AssertionError("Invalid parametrize!")
 
     np.testing.assert_array_almost_equal(outputs_val, expected_val)
 

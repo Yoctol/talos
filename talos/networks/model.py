@@ -9,8 +9,8 @@ from tensorflow.python.keras.utils import generic_utils
 class Model(keras_Model, abc.ABC):
 
     # HACK override: remove pre-call part!!
-    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/network.py#L729-L814
-    # just copy/paste the source code and remove L767-L802, L806-L813
+    # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/keras/engine/network.py#L690-L784
+    # just copy/paste the source code and remove L732-L781
 
     @base_layer.default
     def build(self, input_shape):
@@ -34,14 +34,11 @@ class Model(keras_Model, abc.ABC):
                 f'input type: {type(input_shape)}',
             )
 
-        # remove L767-L802
+        # remove L732-L781
 
-        # source code L804
+        # source code L782
         if self._layers:
             self._track_layers(self._layers)
-
-        # remove L806-L813
-
         self.built = True
 
     @abc.abstractmethod
@@ -50,14 +47,14 @@ class Model(keras_Model, abc.ABC):
 
     # HACK override: fix output._keras_mask setting and remove the try/except part.
     # don't use sublayer outputs keras_mask if implement compute_mask method.
-    # https://github.com/tensorflow/tensorflow/blob/r1.11/tensorflow/python/keras/engine/base_layer.py#L847-L868
+    # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/keras/engine/base_layer.py#L1350-L1371
     def _set_mask_metadata(self, inputs, outputs, previous_mask):
         output_list = generic_utils.to_list(outputs)
-        # explicitly call compute_mask!!!!!
+        # call compute_mask, even if all _keras_mask already computed!!!!!
         if hasattr(self, 'compute_mask'):
             output_mask = self.compute_mask(inputs, previous_mask)
         else:
-            # fix this line of source code
+            # Fix source code L1358
             output_mask = [
                 x._keras_mask if hasattr(x, '_keras_mask') else None
                 for x in output_list
@@ -69,5 +66,5 @@ class Model(keras_Model, abc.ABC):
             output_mask_list = generic_utils.to_list(output_mask)
 
         for x, m in zip(output_list, output_mask_list):
-            # fix this line of source code
+            # Fix source code 1368, don't except Attribute Error
             x._keras_mask = m
