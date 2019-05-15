@@ -112,7 +112,7 @@ class Beam:
     def _select_new_beam(self, observation):
         step_score = self._score_func(observation)  # shape (N, k, V)
         if self._not_finished is not None:
-            step_score *= tf.to_float(self._not_finished)
+            step_score *= tf.cast(self._not_finished, step_score.dtype)
         if self._sum_score is not None:
             # broadcast: (N, k, 1) + (N, k, V) -> (N, k, V)
             sum_score = tf.expand_dims(self._sum_score, axis=2) + step_score
@@ -136,7 +136,7 @@ class Beam:
         else:
             new_not_finished = step_not_finished
 
-        length_to_add = tf.to_float(new_not_finished)
+        length_to_add = tf.cast(new_not_finished, dtype=tf.float32)
         prev_seqlen = self.select(self._seqlen) if self._seqlen is not None else 1.
         new_seqlen = length_to_add + prev_seqlen
         return new_seqlen, new_not_finished
