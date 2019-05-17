@@ -23,6 +23,7 @@ class MaskConv1D(tf.keras.layers.Conv1D):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
+            mask_threshold=None,
             **kwargs,
         ):
         super().__init__(
@@ -43,6 +44,9 @@ class MaskConv1D(tf.keras.layers.Conv1D):
             bias_constraint=bias_constraint,
             **kwargs,
         )
+        if not (mask_threshold is None or 1 <= mask_threshold <= kernel_size):
+            raise ValueError(f"`mask_threshold` should be in [1, {kernel_size}]")
+        self.mask_threshold = mask_threshold
         self.supports_masking = True
 
     def build(self, input_shape):
@@ -82,8 +86,12 @@ class MaskConv1D(tf.keras.layers.Conv1D):
         output_mask = self._mask_op(mask, self.mask_kernel)  # float
 
         output_mask = tf.squeeze(output_mask, axis=channel_axis)
-        if self.padding == 'same':
-            output_mask = tf.greater(output_mask, 0)
+
+        if self.mask_threshold is not None:
+            mask_threshold = self.mask_threshold
+        elif self.padding == 'same':
+            mask_threshold = self.kernel_size[0] / 2
         else:
-            output_mask = tf.equal(output_mask, self.kernel_size[0])
-        return output_mask
+            mask_threshold = self.kernel_size[0]
+
+        return tf.greater(output_mask, mask_threshold - 0.1)  # avoid rounding error
