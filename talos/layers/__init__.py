@@ -45,7 +45,8 @@ from tensorflow.python.keras.layers.convolutional import Cropping3D
 
 # Core layers.
 from tensorflow.python.keras.layers.core import Masking
-from tensorflow.python.keras.layers.core import Dropout
+# overrided
+# from tensorflow.python.keras.layers.core import Dropout
 from tensorflow.python.keras.layers.core import SpatialDropout1D
 from tensorflow.python.keras.layers.core import SpatialDropout2D
 from tensorflow.python.keras.layers.core import SpatialDropout3D
@@ -148,6 +149,7 @@ from tensorflow.python.keras.layers.serialization import serialize
 
 # Self-defined layers
 from .conv1d_transpose import Conv1DTranspose
+from .dropout import Dropout
 from .embeddings import Embedding
 
 from .layer_norm import LayerNormalization
