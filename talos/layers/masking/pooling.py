@@ -3,7 +3,7 @@ import abc
 import tensorflow as tf
 
 
-class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
+class MaskGlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
     """Abstract class for different global pooling 1D layers.
     """
     def __init__(self, **kwargs):
@@ -23,7 +23,7 @@ class GlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
         pass
 
 
-class GlobalAveragePooling1D(GlobalPooling1D):
+class MaskGlobalAveragePooling1D(MaskGlobalPooling1D):
 
     def call(self, inputs, mask=None):
         if mask is None:
@@ -36,4 +36,4 @@ class GlobalAveragePooling1D(GlobalPooling1D):
 
 
 # Aliases
-GlobalAvgPool1D = GlobalAveragePooling1D
+MaskGlobalAvgPool1D = MaskGlobalAveragePooling1D

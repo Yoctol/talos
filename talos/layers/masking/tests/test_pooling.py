@@ -4,10 +4,10 @@ from unittest.mock import patch
 import numpy as np
 import tensorflow as tf
 
-from ..pooling import GlobalAveragePooling1D
+from ..pooling import MaskGlobalAveragePooling1D
 
 
-class TestGlobalPooling1D:
+class TestMaskGlobalAveragePooling1D:
 
     @pytest.fixture(scope='class')
     def inputs(self):
@@ -20,7 +20,7 @@ class TestGlobalPooling1D:
 
     @pytest.fixture(scope='class')
     def layer(self):
-        return GlobalAveragePooling1D()
+        return MaskGlobalAveragePooling1D()
 
     def test_mask_value(self, sess, inputs, mask, layer):
         outputs = layer(inputs, mask=mask)
