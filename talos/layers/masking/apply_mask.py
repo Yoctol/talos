@@ -10,7 +10,15 @@ class ApplyMask(tf.keras.layers.Layer):
     def call(self, inputs, mask=None):
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)
-            inputs *= tf.expand_dims(mask, axis=-1)
+            i_rank = inputs.shape.ndims
+            m_rank = mask.shape.ndims
+            if i_rank > m_rank:
+                indices = (slice(None),) * m_rank + (tf.newaxis,) * (i_rank - m_rank)
+                inputs *= mask[indices]
+            elif i_rank == m_rank:
+                inputs *= mask
+            else:
+                raise ValueError(f"Invalid mask rank > inputs rank! {m_rank} > {i_rank}")
 
         return inputs
 
