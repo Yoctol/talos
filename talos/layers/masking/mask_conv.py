@@ -68,8 +68,7 @@ class MaskConv1D(tf.keras.layers.Conv1D):
         )
 
     def call(self, inputs, mask=None):
-        outputs = super().call(inputs)
-        return outputs
+        return super().call(inputs)
 
     def compute_mask(self, inputs, mask):
         if mask is None:

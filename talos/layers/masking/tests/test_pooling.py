@@ -4,7 +4,55 @@ from unittest.mock import patch
 import numpy as np
 import tensorflow as tf
 
-from ..pooling import MaskGlobalAveragePooling1D
+from ..apply_mask import ApplyMask
+from ..pooling import (
+    MaskAveragePooling1D,
+    MaskGlobalAveragePooling1D,
+)
+
+
+@pytest.mark.parametrize('padding', ['same', 'valid'])
+def test_mask_conv(padding, sess):
+    layer = MaskAveragePooling1D(pool_size=3, padding=padding)
+    x = tf.constant([
+        list(range(10)),
+        list(range(10)),
+    ], dtype=tf.float32)[:, :, tf.newaxis]  # shape (2, 10, 1)
+    x._keras_mask = tf.sequence_mask([4, 9], maxlen=10)
+    masked_x = ApplyMask()(x)
+    out = layer(masked_x)
+
+    def avg(*args):
+        return sum(args) / len(args)
+
+    if padding == 'same':
+        # digit: True, x: False, p: pad, () each pooling window
+        # (p01)(23x)(xxx)(xxp)  seqlen = 4
+        # (p01)(234)(567)(8xp)  seqlen = 9
+        expected_out = [
+            [avg(0, 1), avg(2, 3), 0., 0.],
+            [avg(0, 1), avg(2, 3, 4), avg(5, 6, 7), 8.],
+        ]
+        expected_mask = [
+            [True, True, False, False],
+            [True, True, True, False],  # True if at least half is True
+        ]
+    else:
+        # digit: True, F: False, p: pad, () each pooling window
+        # (012)(3xx)(xxx)x  seqlen = 4
+        # (012)(345)(678)x  seqlen = 9
+        expected_out = [
+            [avg(0, 1, 2), 3., 0.],
+            [avg(0, 1, 2), avg(3, 4, 5), avg(6, 7, 8)],
+        ]
+        expected_mask = [
+            [True, False, False],
+            [True, True, True],  # True if all is True
+        ]
+
+    expected_out = np.array(expected_out)[:, :, np.newaxis]
+    np.testing.assert_array_almost_equal(sess.run(out), expected_out, decimal=4)
+    np.testing.assert_array_equal(sess.run(out._keras_mask), expected_mask)
 
 
 class TestMaskGlobalAveragePooling1D:
