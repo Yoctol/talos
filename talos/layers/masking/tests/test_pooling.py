@@ -12,7 +12,7 @@ from ..pooling import (
 
 
 @pytest.mark.parametrize('padding', ['same', 'valid'])
-def test_mask_conv(padding, sess):
+def test_mask_avg_pool1d(padding, sess):
     layer = MaskAveragePooling1D(pool_size=3, padding=padding)
     x = tf.constant([
         list(range(10)),
