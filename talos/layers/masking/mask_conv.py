@@ -90,7 +90,11 @@ class MaskConv1D(tf.keras.layers.Conv1D):
             mask_threshold = self.mask_threshold
         elif self.padding == 'same':
             mask_threshold = self.kernel_size[0] / 2
-        else:
+        elif self.padding == 'valid':
             mask_threshold = self.kernel_size[0]
+        elif self.padding == 'causal':
+            mask_threshold = 1
+        else:  # other padding should be raised when init
+            raise AssertionError
 
         return tf.greater(output_mask, mask_threshold - 0.1)  # avoid rounding error
