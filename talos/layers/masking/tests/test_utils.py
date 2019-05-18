@@ -11,7 +11,6 @@ def test_apply_mask(sess):
     mask = tf.constant([[True, False, True, True, False]])
     out = apply_mask(x, mask)
 
-    assert out._keras_mask is mask
     np.testing.assert_array_equal(
         sess.run(out),
         [[[0., 1.], [0., 0.], [4., 5.], [6., 7.], [0., 0.]]],

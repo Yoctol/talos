@@ -17,5 +17,4 @@ def apply_mask(inputs: tf.Tensor, mask: tf.Tensor = None) -> tf.Tensor:
         else:
             raise ValueError(f"Invalid mask rank > inputs rank! {m_rank} > {i_rank}")
 
-    inputs._keras_mask = mask
     return inputs
