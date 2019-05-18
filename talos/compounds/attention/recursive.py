@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from talos.layers import Layer
+from talos.layers.masking.utils import apply_mask
 
 
 _LARGE_BIAS = 1e4
@@ -112,8 +113,7 @@ class RelativeAttentionCell(Layer):
             for kernel in (self.key_W, self.value_W)
         ]  # shape (N, T, h, U)
 
-        if mask is not None:
-            query *= mask[:, :, tf.newaxis, tf.newaxis]
+        query = apply_mask(query, mask)
 
         rel = self._get_positional_matrix(
             q_length=query.shape[1].value,

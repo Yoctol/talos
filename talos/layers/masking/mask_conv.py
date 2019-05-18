@@ -3,6 +3,8 @@ from tensorflow.python.keras.utils import conv_utils
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import nn_ops
 
+from .utils import apply_mask
+
 
 class MaskConv1D(tf.keras.layers.Conv1D):
 
@@ -68,6 +70,7 @@ class MaskConv1D(tf.keras.layers.Conv1D):
         )
 
     def call(self, inputs, mask=None):
+        inputs = apply_mask(inputs, mask=mask)
         return super().call(inputs)
 
     def compute_mask(self, inputs, mask):

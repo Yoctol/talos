@@ -5,6 +5,8 @@ from tensorflow.python.keras.utils import conv_utils
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import nn_ops
 
+from .utils import apply_mask
+
 
 class MaskAveragePooling1D(tf.keras.layers.AveragePooling1D):
 
@@ -47,6 +49,7 @@ class MaskAveragePooling1D(tf.keras.layers.AveragePooling1D):
         )
 
     def call(self, inputs, mask=None):
+        inputs = apply_mask(inputs, mask=mask)
         outputs = super().call(inputs)
         if mask is None:
             return outputs
@@ -118,10 +121,11 @@ class MaskGlobalAveragePooling1D(MaskGlobalPooling1D):
         if mask is None:
             return tf.reduce_mean(inputs, axis=1)
 
-        mask = tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]  # shape (N, T, 1)
-        masked_inputs = tf.reduce_sum(inputs * mask, axis=1)  # shape (N, d_in)
-        true_count = tf.reduce_sum(mask, axis=1)  # shape (N, 1)
-        return masked_inputs / (true_count + tf.keras.backend.epsilon())
+        mask = tf.cast(mask, inputs.dtype)
+        masked_inputs = apply_mask(inputs, mask)
+        sum_inputs = tf.reduce_sum(masked_inputs, axis=1)  # shape (N, d_in)
+        true_count = tf.reduce_sum(mask, axis=1, keepdims=True)  # shape (N, 1)
+        return sum_inputs / (true_count + tf.keras.backend.epsilon())
 
 
 # Aliases

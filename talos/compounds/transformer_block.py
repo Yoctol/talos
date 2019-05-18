@@ -3,6 +3,7 @@ from typing import Callable, Tuple, Union
 import tensorflow as tf
 
 from talos.layers import Dropout, LayerNormalization
+from talos.layers.masking.utils import apply_mask
 from talos.networks import Model
 
 from .attention import MultiHeadSelfAttention, MultiHeadAttention
@@ -83,8 +84,7 @@ class TransformerBlock(Model):
         outputs = self.output_dense(outputs)  # dense layer(output_dim)
         outputs = self.dropout_ff(outputs, training=training) + self_att_vec  # res-connect
 
-        if mask is not None:
-            outputs *= tf.cast(mask, inputs.dtype)[:, :, tf.newaxis]
+        outputs = apply_mask(outputs, mask)
         return outputs
 
     def compute_output_shape(self, input_shape):
@@ -204,8 +204,7 @@ class TransformerDecoderBlock(Model):
         outputs = self.output_dense(outputs)
         outputs = self.dropout_ff(outputs, training=training) + att_vec
 
-        if inputs_mask is not None:
-            outputs *= tf.cast(inputs_mask, outputs.dtype)[:, :, tf.newaxis]
+        outputs = apply_mask(outputs, inputs_mask)
 
         # NOTE must be list!!!!! tuple will cause _set_mask_metadata wrong!!!!
         return [outputs, encoder_outputs]

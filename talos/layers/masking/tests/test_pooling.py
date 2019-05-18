@@ -4,7 +4,6 @@ from unittest.mock import patch
 import numpy as np
 import tensorflow as tf
 
-from ..apply_mask import ApplyMask
 from ..pooling import (
     MaskAveragePooling1D,
     MaskGlobalAveragePooling1D,
@@ -19,8 +18,7 @@ def test_mask_avg_pool1d(padding, sess):
         list(range(10)),
     ], dtype=tf.float32)[:, :, tf.newaxis]  # shape (2, 10, 1)
     x._keras_mask = tf.sequence_mask([4, 9], maxlen=10)
-    masked_x = ApplyMask()(x)
-    out = layer(masked_x)
+    out = layer(x)
 
     def avg(*args):
         return sum(args) / len(args)
