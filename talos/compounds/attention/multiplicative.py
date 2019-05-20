@@ -3,6 +3,7 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 
+from talos.layers.masking.utils import apply_mask
 from talos.networks import Model
 
 
@@ -164,7 +165,7 @@ class MultiHeadSelfAttention(_MultiHeadScaledDotAttention):
 
         if mask is not None:
             mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
-            query *= mask[:, :, tf.newaxis]
+            query = apply_mask(query, mask)
 
         attended_vec = self._multihead_attention(
             query=query,
@@ -267,9 +268,7 @@ class MultiHeadAttention(_MultiHeadScaledDotAttention):
         if kv_mask is not None:
             kv_mask = tf.cast(kv_mask, kv.dtype)  # shape (N, T)
 
-        if inputs_mask is not None:
-            query *= tf.cast(inputs_mask, query.dtype)[:, :, tf.newaxis]  # shape (N, T', d_out)
-
+        query = apply_mask(query, inputs_mask)
         attended_vec = self._multihead_attention(
             query=query,
             key=key,
