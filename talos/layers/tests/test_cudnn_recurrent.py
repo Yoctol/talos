@@ -1,3 +1,4 @@
+import os
 import pytest
 
 import tensorflow as tf
@@ -5,6 +6,10 @@ import tensorflow as tf
 from ..cudnn_recurrent import CuDNNGRU, CuDNNLSTM
 
 
+@pytest.mark.skipif(
+    not os.getenv('CUDA_VISIBLE_DEVICES'),
+    reason="need gpu to run",
+)
 @pytest.mark.parametrize('layer_cls', [CuDNNGRU, CuDNNLSTM])
 def test_bypass_mask(layer_cls):
     layer = layer_cls(5, return_sequences=True)
