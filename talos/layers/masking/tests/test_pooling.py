@@ -7,6 +7,7 @@ import tensorflow as tf
 from ..pooling import (
     MaskAveragePooling1D,
     MaskGlobalAveragePooling1D,
+    MaskGlobalMaxPooling1D,
 )
 
 
@@ -98,3 +99,17 @@ class TestMaskGlobalAveragePooling1D:
 
         kwargs = mock_layer_call.call_args[1]
         assert isinstance(kwargs['mask'], tf.Tensor)  # has passed to layer
+
+
+def test_mask_global_max_pool1d(sess):
+    layer = MaskGlobalMaxPooling1D()
+    x = tf.constant([
+        [1., 2., 3., 4., 5.],
+        [1., 2., 3., 4., 5.],
+    ])[:, :, tf.newaxis]  # shape (2, 5, 1)
+    x._keras_mask = tf.sequence_mask([3, 0], maxlen=5)
+    out = layer(x)
+    np.testing.assert_array_almost_equal(
+        sess.run(out),
+        np.array([[3.], [0.]]),
+    )

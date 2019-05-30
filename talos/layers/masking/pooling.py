@@ -5,6 +5,9 @@ import tensorflow as tf
 from .utils import apply_mask, ComputeOutputMaskMixin1D
 
 
+_LARGE_BIAS = 1e4
+
+
 class MaskAveragePooling1D(ComputeOutputMaskMixin1D, tf.keras.layers.AveragePooling1D):
 
     def call(self, inputs, mask=None):
@@ -64,6 +67,20 @@ class MaskGlobalAveragePooling1D(MaskGlobalPooling1D):
         return sum_inputs / (true_count + tf.keras.backend.epsilon())
 
 
+class MaskGlobalMaxPooling1D(MaskGlobalPooling1D):
+
+    def call(self, inputs, mask=None):
+        if mask is None:
+            return tf.reduce_max(inputs, axis=1)
+
+        any_nonzero = tf.reduce_any(mask, axis=1)  # shape (N)
+        mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+        bias = (1. - mask) * _LARGE_BIAS
+        outputs = tf.reduce_max(inputs - bias[:, :, tf.newaxis], axis=1)  # shape (N, D)
+        return apply_mask(outputs, any_nonzero)
+
+
 # Aliases
 MaskGlobalAvgPool1D = MaskGlobalAveragePooling1D
+MaskGlobalMaxPool1D = MaskGlobalMaxPooling1D
 MaskAvgPool1D = MaskAveragePooling1D
