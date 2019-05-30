@@ -34,6 +34,17 @@ class MaskAveragePooling1D(ComputeOutputMaskMixin1D, tf.keras.layers.AveragePool
         return outputs / (avg_true + tf.keras.backend.epsilon())
 
 
+class MaskMaxPooling1D(ComputeOutputMaskMixin1D, tf.keras.layers.MaxPooling1D):
+
+    def call(self, inputs, mask=None):
+        if mask is None:
+            return super().call(inputs)
+
+        mask = tf.cast(mask, inputs.dtype)  # shape (N, T)
+        bias = (1. - mask) * _LARGE_BIAS
+        return super().call(inputs - bias[:, :, tf.newaxis])  # shape (N, D)
+
+
 class MaskGlobalPooling1D(tf.keras.layers.Layer, abc.ABC):
     """Abstract class for different global pooling 1D layers.
     """
@@ -84,3 +95,4 @@ class MaskGlobalMaxPooling1D(MaskGlobalPooling1D):
 MaskGlobalAvgPool1D = MaskGlobalAveragePooling1D
 MaskGlobalMaxPool1D = MaskGlobalMaxPooling1D
 MaskAvgPool1D = MaskAveragePooling1D
+MaskMaxPool1D = MaskMaxPooling1D
