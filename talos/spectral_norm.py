@@ -2,6 +2,7 @@ import types
 from typing import Set
 
 import tensorflow as tf
+from tensorflow.python.keras.layers.cudnn_recurrent import _CuDNNRNN
 
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
@@ -12,6 +13,8 @@ def add_spectral_norm(layer: tf.layers.Layer):
             add_spectral_norm(sub_layer)
     elif isinstance(layer, tf.keras.Model):
         add_spectral_norm_for_model(layer)
+    elif isinstance(layer, _CuDNNRNN):
+        add_spectral_norm_for_layer(layer)  # unlike RNN, not a wrapper of cell
     elif isinstance(layer, tf.keras.layers.RNN):
         add_spectral_norm(layer.cell)
     elif isinstance(layer, tf.keras.layers.StackedRNNCells):
