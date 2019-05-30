@@ -3,6 +3,7 @@ import pytest
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.keras.layers.cudnn_recurrent import _CuDNNRNN
 
 from talos.compounds import TransformerBlock
 from talos.layers import (
@@ -119,7 +120,9 @@ def recursive_get_kernel_attributes(layer):
     if isinstance(layer, tf.keras.layers.Wrapper):
         return recursive_get_kernel_attributes(layer.layer)
 
-    if isinstance(layer, tf.keras.layers.RNN):
+    if isinstance(layer, _CuDNNRNN):
+        pass
+    elif isinstance(layer, tf.keras.layers.RNN):
         return recursive_get_kernel_attributes(layer.cell)
 
     return [
