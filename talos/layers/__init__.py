@@ -132,10 +132,6 @@ from tensorflow.python.keras.layers.recurrent import LSTM
 # Convolutional-recurrent layers.
 from tensorflow.python.keras.layers.convolutional_recurrent import ConvLSTM2D
 
-# CuDNN recurrent layers.
-from tensorflow.python.keras.layers.cudnn_recurrent import CuDNNLSTM
-from tensorflow.python.keras.layers.cudnn_recurrent import CuDNNGRU
-
 # Wrapper functions
 from tensorflow.python.keras.layers.wrappers import Wrapper
 from tensorflow.python.keras.layers.wrappers import Bidirectional
@@ -153,6 +149,9 @@ from .dropout import Dropout
 from .embeddings import Embedding
 from .layer_norm import LayerNormalization
 from .positional_encode import PositionalEncode
+
+from .cudnn_recurrent import CuDNNLSTM
+from .cudnn_recurrent import CuDNNGRU
 
 import talos.layers.masking
 import talos.layers.wrappers
