@@ -18,6 +18,7 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_constraint=None,
             mask_index: Union[int, Sequence[int]] = None,
             input_length: int = None,
+            dropout: float = None,
             **kwargs,
         ):
         if 'input_shape' not in kwargs:
@@ -38,6 +39,11 @@ class Embedding(tf.keras.layers.Embedding):
         self.mask_index = self._standardize_mask_index(mask_index)
         self.supports_masking = (mask_index is not None)
         self.input_length = input_length
+
+        if not (dropout is None or 0. < dropout < 1.):
+            raise ValueError(f"`dropout` should be in (0., 1.)! Found {dropout}")
+        self.dropout = dropout
+
         self.auxiliary_tokens = 0
         self._constant = False
 
@@ -153,11 +159,30 @@ class Embedding(tf.keras.layers.Embedding):
         if not (0 <= mask_index < self.input_dim):
             raise ValueError("`mask_index` should be in range [0, input_dim)!")
 
-    def call(self, inputs, mask=None):
+    def call(self, inputs, mask=None, training=None):
         if inputs.dtype not in (tf.int32, tf.int64):
             inputs = tf.cast(inputs, tf.int32)
 
-        out = tf.nn.embedding_lookup(self.total_embeddings, inputs)
+        if training is None:
+            training = tf.keras.backend.learning_phase()
+
+        if self.dropout is not None:
+            # randomly drop token: row of embedding matrix
+            def dropped_embeddings():
+                return tf.nn.dropout(
+                    self.total_embeddings,
+                    rate=self.dropout,
+                    noise_shape=(self.vocab_size, 1),  # for broadcast
+                ) * (1. - self.dropout)  # avoid scaling
+            embeddings = tf_utils.smart_cond(
+                training,
+                dropped_embeddings,
+                lambda: tf.identity(self.total_embeddings),
+            )
+        else:
+            embeddings = self.total_embeddings
+
+        out = tf.nn.embedding_lookup(embeddings, inputs)
         return out
 
     def compute_mask(self, inputs, mask):
