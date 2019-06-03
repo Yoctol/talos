@@ -46,7 +46,7 @@ class ComputeOutputMaskMixin1D:
         if self.mask_threshold:
             # just for given threshold
             size = self._get_window_size()
-            self.mask_kernel = tf.ones(size + (1, 1), dtype=self.dtype)
+            self.mask_kernel = tf.ones((size, 1, 1), dtype=self.dtype)
             if self.padding == 'causal':
                 op_padding = 'valid'
             else:
