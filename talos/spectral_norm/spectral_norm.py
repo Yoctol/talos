@@ -2,7 +2,11 @@ import types
 from typing import Set
 
 import tensorflow as tf
-from tensorflow.python.keras.layers.cudnn_recurrent import _CuDNNRNN
+from tensorflow.python.keras.layers.cudnn_recurrent import (
+    _CuDNNRNN,
+    CuDNNGRU,
+    CuDNNLSTM,
+)
 
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
@@ -30,6 +34,20 @@ def add_spectral_norm(layer: tf.layers.Layer):
 
 
 def add_spectral_norm_for_layer(
+        layer: tf.layers.Layer,
+        kernel_name: Set[str] = None,
+    ):
+    if isinstance(layer, (CuDNNGRU, tf.keras.layers.GRUCell)):
+        weight_split = 3
+    elif isinstance(layer, (CuDNNLSTM, tf.keras.layers.LSTMCell)):
+        weight_split = 4
+    else:
+        weight_split = 1
+
+    _add_spectral_norm_for_layer(layer, kernel_name, weight_split=weight_split)
+
+
+def _add_spectral_norm_for_layer(
         layer: tf.layers.Layer,
         kernel_name: Set[str] = None,
         weight_split: int = 1,
@@ -66,7 +84,7 @@ def add_spectral_norm_for_layer(
                     original_add_weight,
                 )
                 spectral_norm_list.append(
-                    tf.squeeze(spectral_norm, name=f'{name}_{i}/singular_value',),
+                    tf.squeeze(spectral_norm, name=f'{name}_{i}/singular_value', axis=[1]),
                 )  # shape (1)
                 self.add_update(update_u)
 
@@ -119,7 +137,7 @@ def _build_spectral_norm_variables(name, kernel, add_weight_func):
         tf.nn.l2_normalize(unnormed_new_u),
         name=f'{name}/new_left_singular_vector',
     )
-    spectral_norm = tf.matmul(new_u, unnormed_new_u, transpose_a=True),
+    spectral_norm = tf.matmul(new_u, unnormed_new_u, transpose_a=True)
     update_u = tf.assign(u_vector, new_u, name=f'{name}/power_iter')
     return spectral_norm, update_u
 

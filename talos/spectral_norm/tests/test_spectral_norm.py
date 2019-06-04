@@ -80,7 +80,6 @@ def test_add_spectral_norm(layer, inputs, sess):
     kernel_list = recursive_get_kernel_attributes(layer)
     u_vector_list = layer.non_trainable_variables
 
-    assert len(layer.updates) == len(u_vector_list) == len(kernel_list)
     # Since norm come from division
     assert all([kernel.op.type == 'RealDiv' for kernel in kernel_list])
 
