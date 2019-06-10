@@ -113,6 +113,44 @@ def test_auxiliary_tokens_partially_trainable(inputs, sess, constant):
         )
 
 
+@pytest.mark.parametrize('constant', [False, True])
+def test_extend_dims_partially_trainable(inputs, sess, constant):
+    maxlen = inputs.shape[1].value
+    vocab_size = 5
+    original_embedding_size = 3
+    embed_layer = Embedding.from_weights(
+        np.random.uniform(size=[vocab_size, original_embedding_size]).astype(np.float32),
+        constant=constant,
+        trainable=False,
+        extend_dims=2,
+    )
+    word_vec = embed_layer(inputs)
+    assert len(embed_layer.trainable_variables) == 1
+    assert len(embed_layer.non_trainable_variables) == (0 if constant else 1)
+    assert len(embed_layer.variables) == (1 if constant else 2)
+
+    update_op = tf.train.GradientDescentOptimizer(0.1).minimize(tf.reduce_sum(word_vec))
+
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
+
+    original_weights_val = sess.run(embed_layer.total_embeddings)
+    sess.run(update_op, feed_dict={inputs: np.random.choice(vocab_size, size=[10, maxlen])})
+    new_weights_val = sess.run(embed_layer.total_embeddings)
+
+    # after update:
+    # first 5 row should keep
+    np.testing.assert_array_almost_equal(
+        original_weights_val[:, : original_embedding_size],
+        new_weights_val[:, : original_embedding_size],
+    )
+    # others (extend dims) should change.
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_almost_equal(
+            original_weights_val[:, original_embedding_size:],  # extend dims
+            new_weights_val[:, original_embedding_size:],
+        )
+
+
 @pytest.mark.parametrize('invalid_weights', [
     np.zeros([5]),
     np.zeros([1, 2, 3]),

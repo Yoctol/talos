@@ -1,5 +1,7 @@
 .DEFAULT_GOAL := all
 
+TARGET = talos
+
 .PHONY: install
 install:
 	pip install -U pip wheel setuptools
@@ -12,7 +14,7 @@ lint:
 
 .PHONY: test
 test:
-	pytest --cov=talos/ --cov-fail-under=80
+	pytest ${TARGET} --cov=talos/ --cov-fail-under=80
 
 .PHONY: test-report
 test-report:

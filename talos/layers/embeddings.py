@@ -45,6 +45,7 @@ class Embedding(tf.keras.layers.Embedding):
         self.dropout = dropout
 
         self.auxiliary_tokens = 0
+        self.extend_dims = 0
         self._constant = False
 
     @tf_utils.shape_type_conversion
@@ -60,6 +61,9 @@ class Embedding(tf.keras.layers.Embedding):
                 constraint=self.embeddings_constraint,
                 trainable=self.trainable,
             )
+
+        self.total_embeddings = self.embeddings
+
         if self.auxiliary_tokens > 0:
             # HACK, since Layer.add_weight will take
             # the intersection of trainable (in arg) and self.trainable
@@ -74,12 +78,28 @@ class Embedding(tf.keras.layers.Embedding):
             )
             self.trainable = original_trainable
             self.total_embeddings = tf.concat(
-                [self.embeddings, self.auxiliary_embeddings],
+                [self.total_embeddings, self.auxiliary_embeddings],
                 axis=0,
-                name='total_embeddings',
+                name='embeddings_with_auxiliary_tokens',
             )
-        else:
-            self.total_embeddings = self.embeddings
+
+        if self.extend_dims > 0:
+            original_trainable = self.trainable
+            self.trainable = True
+            vocab_size = self.total_embeddings.shape[0].value
+            embeddings_dim = self.total_embeddings.shape[1].value
+            self.extend_embeddings = self.add_weight(
+                shape=(vocab_size, embeddings_dim + self.extend_dims),
+                name='extend_embeddings_dims',
+                trainable=True,
+            )
+            self.trainable = original_trainable
+            self.total_embeddings = tf.concat(
+                [self.total_embeddings, self.extend_embeddings],
+                axis=1,
+                name='embeddings_with_extended_dims',
+            )
+        self.total_embeddings = tf.identity(self.total_embeddings, name='total_embeddings')
         self.built = True
 
     @property
@@ -101,6 +121,7 @@ class Embedding(tf.keras.layers.Embedding):
             mask_index: Union[int, Sequence[int]] = None,
             constant: bool = False,
             auxiliary_tokens: int = 0,
+            extend_dims: int = 0,
             dropout: float = None,
             **kwargs,
         ):
@@ -142,6 +163,7 @@ class Embedding(tf.keras.layers.Embedding):
             layer.trainable = False
             layer._constant = True
         layer.auxiliary_tokens = auxiliary_tokens
+        layer.extend_dims = extend_dims
         return layer
 
     def _standardize_mask_index(self, mask_index):
