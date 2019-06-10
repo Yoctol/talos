@@ -101,6 +101,7 @@ class Embedding(tf.keras.layers.Embedding):
             mask_index: Union[int, Sequence[int]] = None,
             constant: bool = False,
             auxiliary_tokens: int = 0,
+            dropout: float = None,
             **kwargs,
         ):
         '''Create a Embedding Layer by pre-defined matrix of shape (vocab_size, dimension).
@@ -134,6 +135,7 @@ class Embedding(tf.keras.layers.Embedding):
             embeddings_initializer=initializer,
             mask_index=mask_index,
             dtype=dtype,
+            dropout=dropout,
             **kwargs,
         )
         if constant:
