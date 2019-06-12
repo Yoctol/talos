@@ -66,7 +66,8 @@ def test_init_from_invalid_mask_index_raise(invalid_mask_index):
 
 
 def test_dropout(inputs, sess):
-    embed_layer = Embedding(vocab_size=10, embeddings_dim=5, dropout=0.8)
+    embed_layer = Embedding(
+        vocab_size=10, embeddings_dim=5, dropout=0.8, embeddings_initializer='ones')
     training = tf.placeholder(dtype=tf.bool, shape=())
     outputs = embed_layer(inputs, mask=mask, training=training)
 
@@ -78,7 +79,7 @@ def test_dropout(inputs, sess):
         outputs,
         feed_dict={inputs: input_val, training: True},
     )
-    assert (dropped_out == 0.).any()
+    assert np.all(dropped_out == 0., axis=2).any()  # on embedding dims
 
     no_dropped_out = sess.run(
         outputs,
