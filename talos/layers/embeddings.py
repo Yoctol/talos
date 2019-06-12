@@ -64,42 +64,42 @@ class Embedding(tf.keras.layers.Embedding):
 
         self.total_embeddings = self.embeddings
 
-        if self.auxiliary_tokens > 0:
-            # HACK, since Layer.add_weight will take
-            # the intersection of trainable (in arg) and self.trainable
-            # manually set self.trainable = True
-            # to make sure auxiliary_embeddings is tracked by backend.
-            original_trainable = self.trainable
-            self.trainable = True
-            self.auxiliary_embeddings = self.add_weight(
-                shape=(self.auxiliary_tokens, self.output_dim),
-                name='auxiliary_embeddings',
-                trainable=True,
+        if self.extend_dims > 0:
+            self.extend_embeddings = self._force_trainable_add_weight(
+                shape=(self.input_dim, self.extend_dims),
+                name='extend_embeddings',
             )
-            self.trainable = original_trainable
+            self.total_embeddings = tf.concat(
+                [self.total_embeddings, self.extend_embeddings],
+                axis=1,
+                name='embeddings_with_extended_dims',
+            )
+
+        if self.auxiliary_tokens > 0:
+            embeddings_dim = self.total_embeddings.shape[1].value
+            self.auxiliary_embeddings = self._force_trainable_add_weight(
+                shape=(self.auxiliary_tokens, embeddings_dim),
+                name='auxiliary_embeddings',
+            )
             self.total_embeddings = tf.concat(
                 [self.total_embeddings, self.auxiliary_embeddings],
                 axis=0,
                 name='embeddings_with_auxiliary_tokens',
             )
 
-        if self.extend_dims > 0:
-            original_trainable = self.trainable
-            self.trainable = True
-            vocab_size, embeddings_dim = self.total_embeddings.shape.as_list()
-            self.extend_embeddings = self.add_weight(
-                shape=(vocab_size, embeddings_dim + self.extend_dims),
-                name='extend_embeddings_dims',
-                trainable=True,
-            )
-            self.trainable = original_trainable
-            self.total_embeddings = tf.concat(
-                [self.total_embeddings, self.extend_embeddings],
-                axis=1,
-                name='embeddings_with_extended_dims',
-            )
         self.total_embeddings = tf.identity(self.total_embeddings, name='total_embeddings')
         self.built = True
+
+    def _force_trainable_add_weight(self, **kwargs):
+        # HACK, since Layer.add_weight will take
+        # the intersection of trainable (in arg) and self.trainable
+        # manually set self.trainable = True
+        # to make sure weight is tracked by backend.
+        original_trainable = self.trainable
+        self.trainable = True
+        weight = self.add_weight(**kwargs, trainable=True)
+        self.trainable = original_trainable
+        return weight
 
     @property
     def trainable_weights(self):
@@ -235,5 +235,7 @@ class Embedding(tf.keras.layers.Embedding):
             'mask_index': self.mask_index,
             'input_length': self.input_length,
             'auxiliary_tokens': self.auxiliary_tokens,
+            'extend_dims': self.extend_dims,
+            'dropout': self.dropout,
         }
         return config

@@ -78,76 +78,67 @@ def test_construct_from_weights(inputs, sess, constant):
 
 
 @pytest.mark.parametrize('constant', [False, True])
-def test_auxiliary_tokens_partially_trainable(inputs, sess, constant):
+@pytest.mark.parametrize('auxiliary_tokens, extend_dims', [
+    (0, 2),
+    (2, 0),
+    (2, 2),
+])
+def test_extend_partially_trainable(inputs, sess, constant, auxiliary_tokens, extend_dims):
     maxlen = inputs.shape[1].value
+    vocab_size, embeddings_dim = 5, 3
     embed_layer = Embedding.from_weights(
-        np.random.uniform(size=[5, 3]).astype(np.float32),
+        np.random.uniform(size=[vocab_size, embeddings_dim]).astype(np.float32),
         constant=constant,
         trainable=False,
-        auxiliary_tokens=2,
+        auxiliary_tokens=auxiliary_tokens,
+        extend_dims=extend_dims,
     )
     word_vec = embed_layer(inputs)
-    assert len(embed_layer.trainable_variables) == 1
-    assert len(embed_layer.non_trainable_variables) == (0 if constant else 1)
-    assert len(embed_layer.variables) == (1 if constant else 2)
+
+    len_trainable_variables = (1 if auxiliary_tokens else 0) + (1 if extend_dims else 0)
+    len_non_trainable_variables = 0 if constant else 1
+
+    assert len(embed_layer.trainable_variables) == len_trainable_variables
+    assert len(embed_layer.non_trainable_variables) == len_non_trainable_variables
+    assert len(embed_layer.variables) == len_trainable_variables + len_non_trainable_variables
+    assert embed_layer.total_embeddings.shape.as_list() == [
+        vocab_size + auxiliary_tokens,
+        embeddings_dim + extend_dims,
+    ]
 
     update_op = tf.train.GradientDescentOptimizer(0.1).minimize(tf.reduce_sum(word_vec))
 
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
 
     original_weights_val = sess.run(embed_layer.total_embeddings)
-    sess.run(update_op, feed_dict={inputs: np.random.choice(5 + 2, size=[10, maxlen])})
+    sess.run(
+        update_op,
+        feed_dict={inputs: np.random.choice(
+            vocab_size + auxiliary_tokens,
+            size=[10, maxlen],
+        )},
+    )
     new_weights_val = sess.run(embed_layer.total_embeddings)
 
     # after update:
-    # first 5 row should keep
+    # original part should keep
     np.testing.assert_array_almost_equal(
-        original_weights_val[:5],
-        new_weights_val[:5],
+        original_weights_val[: vocab_size, : embeddings_dim],
+        new_weights_val[: vocab_size, : embeddings_dim],
     )
     # others (auxiliary tokens) should change.
-    with pytest.raises(AssertionError):
-        np.testing.assert_array_almost_equal(
-            original_weights_val[5:],  # auxiliary tokens
-            new_weights_val[5:],
-        )
-
-
-@pytest.mark.parametrize('constant', [False, True])
-def test_extend_dims_partially_trainable(inputs, sess, constant):
-    maxlen = inputs.shape[1].value
-    vocab_size = 5
-    original_embedding_size = 3
-    embed_layer = Embedding.from_weights(
-        np.random.uniform(size=[vocab_size, original_embedding_size]).astype(np.float32),
-        constant=constant,
-        trainable=False,
-        extend_dims=2,
-    )
-    word_vec = embed_layer(inputs)
-    assert len(embed_layer.trainable_variables) == 1
-    assert len(embed_layer.non_trainable_variables) == (0 if constant else 1)
-    assert len(embed_layer.variables) == (1 if constant else 2)
-
-    update_op = tf.train.GradientDescentOptimizer(0.1).minimize(tf.reduce_sum(word_vec))
-
-    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
-
-    original_weights_val = sess.run(embed_layer.total_embeddings)
-    sess.run(update_op, feed_dict={inputs: np.random.choice(vocab_size, size=[10, maxlen])})
-    new_weights_val = sess.run(embed_layer.total_embeddings)
-
-    # after update:
-    np.testing.assert_array_almost_equal(
-        original_weights_val[:, : original_embedding_size],
-        new_weights_val[:, : original_embedding_size],
-    )
-    # others (extend dims) should change.
-    with pytest.raises(AssertionError):
-        np.testing.assert_array_almost_equal(
-            original_weights_val[:, original_embedding_size:],  # extend dims
-            new_weights_val[:, original_embedding_size:],
-        )
+    if auxiliary_tokens:
+        with pytest.raises(AssertionError):
+            np.testing.assert_array_almost_equal(
+                original_weights_val[vocab_size:],
+                new_weights_val[vocab_size:],
+            )
+    if extend_dims:
+        with pytest.raises(AssertionError):
+            np.testing.assert_array_almost_equal(
+                original_weights_val[:, embeddings_dim:],
+                new_weights_val[:, embeddings_dim:],
+            )
 
 
 @pytest.mark.parametrize('invalid_weights', [
@@ -159,16 +150,9 @@ def test_construct_from_invalid_weights_raise(invalid_weights):
         Embedding.from_weights(invalid_weights)
 
 
-@pytest.mark.parametrize('constant,auxiliary_tokens,extend_dims', [
-    (True, 0, 0),
-    (True, 2, 0),
-    (True, 0, 2),
-    (True, 2, 10),
-    (False, 0, 0),
-    (False, 2, 0),
-    (False, 0, 2),
-    (False, 2, 10),
-])
+@pytest.mark.parametrize('constant', [True, False])
+@pytest.mark.parametrize('auxiliary_tokens', [0, 2])
+@pytest.mark.parametrize('extend_dims', [0, 5])
 def test_freeze_success(inputs, sess, constant, auxiliary_tokens, extend_dims):
     # build graph with constant embedding layer
     embed_layer = Embedding.from_weights(
