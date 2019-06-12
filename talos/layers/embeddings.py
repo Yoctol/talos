@@ -104,13 +104,13 @@ class Embedding(tf.keras.layers.Embedding):
     @property
     def trainable_weights(self):
         # HACK in keras implementation, they consider layer.trainable as well,
-        # be it's ignored in this part.
+        # it's ignored in this part.
         return self._trainable_weights
 
     @property
     def non_trainable_weights(self):
         # HACK in keras implementation, they consider layer.trainable as well,
-        # be it's ignored in this part.
+        # it's ignored in this part.
         return self._non_trainable_weights
 
     @classmethod
@@ -190,13 +190,19 @@ class Embedding(tf.keras.layers.Embedding):
             training = tf.keras.backend.learning_phase()
 
         if self.dropout is not None:
-            # randomly drop token: row of embedding matrix
+            # NOTE randomly drop token: row of embedding matrix
+            # to avoid scaling by 1 / keep_prob, slightly modify `tf.nn.dropout`
             def dropped_embeddings():
-                return tf.nn.dropout(
-                    self.total_embeddings,
-                    rate=self.dropout,
-                    noise_shape=(self.vocab_size, 1),  # for broadcast
-                ) * (1. - self.dropout)  # avoid scaling
+                random_tensor = tf.random_uniform(
+                    shape=(self.total_embeddings.shape[0].value, 1),
+                    minval=1. - self.dropout,
+                    maxval=2. - self.dropout,
+                    dtype=self.total_embeddings.dtype,
+                )
+                # 0. if [keep_prob, 1.0) and 1. if [1.0, 1.0 + keep_prob)
+                binary_tensor = tf.math.floor(random_tensor)
+                return self.total_embeddings * binary_tensor
+
             embeddings = tf_utils.smart_cond(
                 training,
                 dropped_embeddings,
@@ -205,8 +211,7 @@ class Embedding(tf.keras.layers.Embedding):
         else:
             embeddings = self.total_embeddings
 
-        out = tf.nn.embedding_lookup(embeddings, inputs)
-        return out
+        return tf.nn.embedding_lookup(embeddings, inputs)
 
     def compute_mask(self, inputs, mask):
         if self.mask_index is None:

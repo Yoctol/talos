@@ -65,6 +65,28 @@ def test_init_from_invalid_mask_index_raise(invalid_mask_index):
         Embedding(vocab_size=5, embeddings_dim=5, mask_index=invalid_mask_index)
 
 
+def test_dropout(inputs, sess):
+    embed_layer = Embedding(vocab_size=10, embeddings_dim=5, dropout=0.8)
+    training = tf.placeholder(dtype=tf.bool, shape=())
+    outputs = embed_layer(inputs, mask=mask, training=training)
+
+    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
+
+    maxlen = inputs.shape[1].value
+    input_val = np.random.randint(0, embed_layer.vocab_size, size=[5, maxlen])
+    dropped_out = sess.run(
+        outputs,
+        feed_dict={inputs: input_val, training: True},
+    )
+    assert (dropped_out == 0.).any()
+
+    no_dropped_out = sess.run(
+        outputs,
+        feed_dict={inputs: input_val, training: False},
+    )
+    assert (no_dropped_out != 0.).all()
+
+
 @pytest.mark.parametrize('constant', [False, True])
 def test_construct_from_weights(inputs, sess, constant):
     weights = np.array([[0, 1], [2, 3], [4, 5]], dtype=np.float32)
