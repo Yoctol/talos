@@ -138,7 +138,6 @@ def test_extend_dims_partially_trainable(inputs, sess, constant):
     new_weights_val = sess.run(embed_layer.total_embeddings)
 
     # after update:
-    # first 5 row should keep
     np.testing.assert_array_almost_equal(
         original_weights_val[:, : original_embedding_size],
         new_weights_val[:, : original_embedding_size],
@@ -160,17 +159,23 @@ def test_construct_from_invalid_weights_raise(invalid_weights):
         Embedding.from_weights(invalid_weights)
 
 
-@pytest.mark.parametrize('constant,auxiliary_tokens', [
-    (True, 0),
-    (True, 2),
-    (False, 2),
+@pytest.mark.parametrize('constant,auxiliary_tokens,extend_dims', [
+    (True, 0, 0),
+    (True, 2, 0),
+    (True, 0, 2),
+    (True, 2, 10),
+    (False, 0, 0),
+    (False, 2, 0),
+    (False, 0, 2),
+    (False, 2, 10),
 ])
-def test_freeze_success(inputs, sess, constant, auxiliary_tokens):
+def test_freeze_success(inputs, sess, constant, auxiliary_tokens, extend_dims):
     # build graph with constant embedding layer
     embed_layer = Embedding.from_weights(
         np.random.rand(5, 10).astype(np.float32),
         constant=constant,
         auxiliary_tokens=auxiliary_tokens,
+        extend_dims=extend_dims,
     )
     outputs = embed_layer(inputs)
     sess.run(tf.variables_initializer(var_list=embed_layer.variables))
@@ -193,30 +198,6 @@ def test_freeze_success(inputs, sess, constant, auxiliary_tokens):
     new_outputs_val = new_sess.run(new_outputs, feed_dict={new_inputs: inputs_val})
 
     np.testing.assert_array_almost_equal(outputs_val, new_outputs_val)
-
-
-@pytest.mark.parametrize('constant,auxiliary_tokens', [
-    (False, 0),  # NOTE only fail in this case
-])
-def test_freeze_fail(inputs, sess, constant, auxiliary_tokens):
-    # build graph with variable embedding layer
-    embed_layer = Embedding.from_weights(
-        np.random.rand(5, 10).astype(np.float32),
-        constant=constant,
-        auxiliary_tokens=auxiliary_tokens,
-    )
-    outputs = embed_layer(inputs)
-
-    sess.run(tf.variables_initializer(var_list=embed_layer.variables))
-
-    frozen_graph_def = graph_util.convert_variables_to_constants(
-        sess=sess,
-        input_graph_def=sess.graph_def,
-        output_node_names=[outputs.op.name],  # node name == op name
-    )
-
-    with pytest.raises(ValueError):
-        create_session_from_graphdef(frozen_graph_def)
 
 
 def create_session_from_graphdef(graph_def):

@@ -86,8 +86,7 @@ class Embedding(tf.keras.layers.Embedding):
         if self.extend_dims > 0:
             original_trainable = self.trainable
             self.trainable = True
-            vocab_size = self.total_embeddings.shape[0].value
-            embeddings_dim = self.total_embeddings.shape[1].value
+            vocab_size, embeddings_dim = self.total_embeddings.shape.as_list()
             self.extend_embeddings = self.add_weight(
                 shape=(vocab_size, embeddings_dim + self.extend_dims),
                 name='extend_embeddings_dims',
