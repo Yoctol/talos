@@ -64,53 +64,53 @@ class Embedding(tf.keras.layers.Embedding):
 
         self.total_embeddings = self.embeddings
 
-        if self.auxiliary_tokens > 0:
-            # HACK, since Layer.add_weight will take
-            # the intersection of trainable (in arg) and self.trainable
-            # manually set self.trainable = True
-            # to make sure auxiliary_embeddings is tracked by backend.
-            original_trainable = self.trainable
-            self.trainable = True
-            self.auxiliary_embeddings = self.add_weight(
-                shape=(self.auxiliary_tokens, self.output_dim),
-                name='auxiliary_embeddings',
-                trainable=True,
+        if self.extend_dims > 0:
+            self.extend_embeddings = self._force_trainable_add_weight(
+                shape=(self.input_dim, self.extend_dims),
+                name='extend_embeddings',
             )
-            self.trainable = original_trainable
+            self.total_embeddings = tf.concat(
+                [self.total_embeddings, self.extend_embeddings],
+                axis=1,
+                name='embeddings_with_extended_dims',
+            )
+
+        if self.auxiliary_tokens > 0:
+            embeddings_dim = self.total_embeddings.shape[1].value
+            self.auxiliary_embeddings = self._force_trainable_add_weight(
+                shape=(self.auxiliary_tokens, embeddings_dim),
+                name='auxiliary_embeddings',
+            )
             self.total_embeddings = tf.concat(
                 [self.total_embeddings, self.auxiliary_embeddings],
                 axis=0,
                 name='embeddings_with_auxiliary_tokens',
             )
 
-        if self.extend_dims > 0:
-            original_trainable = self.trainable
-            self.trainable = True
-            vocab_size, embeddings_dim = self.total_embeddings.shape.as_list()
-            self.extend_embeddings = self.add_weight(
-                shape=(vocab_size, embeddings_dim + self.extend_dims),
-                name='extend_embeddings_dims',
-                trainable=True,
-            )
-            self.trainable = original_trainable
-            self.total_embeddings = tf.concat(
-                [self.total_embeddings, self.extend_embeddings],
-                axis=1,
-                name='embeddings_with_extended_dims',
-            )
         self.total_embeddings = tf.identity(self.total_embeddings, name='total_embeddings')
         self.built = True
+
+    def _force_trainable_add_weight(self, **kwargs):
+        # HACK, since Layer.add_weight will take
+        # the intersection of trainable (in arg) and self.trainable
+        # manually set self.trainable = True
+        # to make sure weight is tracked by backend.
+        original_trainable = self.trainable
+        self.trainable = True
+        weight = self.add_weight(**kwargs, trainable=True)
+        self.trainable = original_trainable
+        return weight
 
     @property
     def trainable_weights(self):
         # HACK in keras implementation, they consider layer.trainable as well,
-        # be it's ignored in this part.
+        # it's ignored in this part.
         return self._trainable_weights
 
     @property
     def non_trainable_weights(self):
         # HACK in keras implementation, they consider layer.trainable as well,
-        # be it's ignored in this part.
+        # it's ignored in this part.
         return self._non_trainable_weights
 
     @classmethod
@@ -190,13 +190,19 @@ class Embedding(tf.keras.layers.Embedding):
             training = tf.keras.backend.learning_phase()
 
         if self.dropout is not None:
-            # randomly drop token: row of embedding matrix
+            # NOTE randomly drop token: row of embedding matrix
+            # to avoid scaling by 1 / keep_prob, slightly modify `tf.nn.dropout`
             def dropped_embeddings():
-                return tf.nn.dropout(
-                    self.total_embeddings,
-                    rate=self.dropout,
-                    noise_shape=(self.vocab_size, 1),  # for broadcast
-                ) * (1. - self.dropout)  # avoid scaling
+                random_tensor = tf.random_uniform(
+                    shape=(self.total_embeddings.shape[0].value, 1),
+                    minval=1. - self.dropout,
+                    maxval=2. - self.dropout,
+                    dtype=self.total_embeddings.dtype,
+                )
+                # 0. if [keep_prob, 1.0) and 1. if [1.0, 1.0 + keep_prob)
+                binary_tensor = tf.math.floor(random_tensor)
+                return self.total_embeddings * binary_tensor
+
             embeddings = tf_utils.smart_cond(
                 training,
                 dropped_embeddings,
@@ -205,8 +211,7 @@ class Embedding(tf.keras.layers.Embedding):
         else:
             embeddings = self.total_embeddings
 
-        out = tf.nn.embedding_lookup(embeddings, inputs)
-        return out
+        return tf.nn.embedding_lookup(embeddings, inputs)
 
     def compute_mask(self, inputs, mask):
         if self.mask_index is None:
@@ -235,5 +240,7 @@ class Embedding(tf.keras.layers.Embedding):
             'mask_index': self.mask_index,
             'input_length': self.input_length,
             'auxiliary_tokens': self.auxiliary_tokens,
+            'extend_dims': self.extend_dims,
+            'dropout': self.dropout,
         }
         return config
