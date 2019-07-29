@@ -123,7 +123,6 @@ from tensorflow.python.keras.layers.pooling import GlobalMaxPool3D
 from tensorflow.python.keras.layers.recurrent import RNN
 from tensorflow.python.keras.layers.recurrent import StackedRNNCells
 from tensorflow.python.keras.layers.recurrent import SimpleRNNCell
-from tensorflow.python.keras.layers.recurrent import GRUCell
 from tensorflow.python.keras.layers.recurrent import LSTMCell
 from tensorflow.python.keras.layers.recurrent import SimpleRNN
 from tensorflow.python.keras.layers.recurrent import GRU
@@ -149,6 +148,7 @@ from .dropout import Dropout
 from .embeddings import Embedding
 from .layer_norm import LayerNormalization
 from .positional_encode import PositionalEncode
+from .recurrent import GRUCell
 
 from .cudnn_recurrent import CuDNNLSTM
 from .cudnn_recurrent import CuDNNGRU
