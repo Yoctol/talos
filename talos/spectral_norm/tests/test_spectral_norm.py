@@ -44,7 +44,8 @@ def test_grad_value(sess):
 
     eps = tf.keras.backend.epsilon()
     # Formula Reference: https://hackmd.io/HHWrnmbWSXKb_DIFmHKtAA
-    expected_dW = (dW_sn_val - u * v[:, 0] * np.sum(W_sn_val * dW_sn_val)) / (sn_val + eps)
+    uv = u[:, np.newaxis] * v
+    expected_dW = (dW_sn_val - uv * np.sum(W_sn_val * dW_sn_val)) / (sn_val + eps)
     np.testing.assert_array_almost_equal(dW_val, expected_dW, decimal=4)
 
 

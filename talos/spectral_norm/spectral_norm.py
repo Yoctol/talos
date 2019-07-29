@@ -76,43 +76,30 @@ def _add_spectral_norm_for_layer(
         if weight_split > 1:
             assert shape[1] % weight_split == 0
             split_kernel = tf.split(kernel_matrix, weight_split, axis=1)
-            spectral_norm_list = []
+            sn_list = []
             for i, sub_kernel in enumerate(split_kernel):
-                spectral_norm, update_u = _build_spectral_norm_variables(
+                sn_val, update_u = _build_spectral_norm_variables(
                     f"{name}_{i}",
                     sub_kernel,
                     original_add_weight,
                 )
-                spectral_norm_list.append(
-                    tf.squeeze(spectral_norm, name=f'{name}_{i}/singular_value', axis=[1]),
-                )  # shape (1)
+                sn_list.append(
+                    tf.fill([sub_kernel.shape[1].value], value=sn_val),
+                )  # shape (V // split)
                 self.add_update(update_u)
 
-            spectral_norm_broadcast = tf.concat([
-                tf.tile(sn, multiples=[shape[1] // weight_split])
-                for sn in spectral_norm_list
-            ], axis=0)  # (split * units)
-            normed_kernel = tf.truediv(
-                kernel,
-                spectral_norm_broadcast + tf.keras.backend.epsilon(),
-                name=f'{name}_sn',
-            )
-
+            spectral_norm = tf.concat(sn_list, axis=0)  # shape (V)
         else:
             spectral_norm, update_u = _build_spectral_norm_variables(
                 name, kernel_matrix, original_add_weight,
-            )
-            spectral_norm = tf.squeeze(
-                spectral_norm,
-                name=f'{name}/singular_value',
-            )
+            )  # shape ()
             self.add_update(update_u)
 
-            normed_kernel = tf.truediv(
-                kernel,
-                spectral_norm + tf.keras.backend.epsilon(),
-                name=f'{name}_sn',
-            )
+        normed_kernel = tf.truediv(
+            kernel,
+            spectral_norm + tf.keras.backend.epsilon(),
+            name=f'{name}_sn',
+        )
         return normed_kernel
 
     layer.add_weight = types.MethodType(new_add_weight, layer)
@@ -122,22 +109,22 @@ def _build_spectral_norm_variables(name, kernel, add_weight_func):
     assert kernel.shape.ndims == 2
     u_vector = add_weight_func(
         name=f'{name}/left_singular_vector',
-        shape=(kernel.shape[0].value, 1),
+        shape=(kernel.shape[0].value, ),
         initializer=tf.keras.initializers.lecun_normal(),  # unit vector
         trainable=False,
         dtype=kernel.dtype,
-    )  # shape (U, 1)
+    )  # shape (U)
 
     new_v = tf.stop_gradient(
-        tf.nn.l2_normalize(tf.matmul(kernel, u_vector, transpose_a=True)),
+        tf.nn.l2_normalize(tf.linalg.matvec(kernel, u_vector, transpose_a=True)),
         name=f'{name}/new_right_singular_vector',
-    )  # shape (V, 1)
-    unnormed_new_u = kernel @ new_v  # shape (U, 1)
+    )  # shape (V)
+    unnormed_new_u = tf.linalg.matvec(kernel, new_v)  # shape (U)
     new_u = tf.stop_gradient(
         tf.nn.l2_normalize(unnormed_new_u),
         name=f'{name}/new_left_singular_vector',
     )
-    spectral_norm = tf.matmul(new_u, unnormed_new_u, transpose_a=True)
+    spectral_norm = tf.reduce_sum(new_u * unnormed_new_u, name=f'{name}/singular_value')
     update_u = tf.assign(u_vector, new_u, name=f'{name}/power_iter')
     return spectral_norm, update_u
 
