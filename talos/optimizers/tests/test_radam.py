@@ -11,8 +11,8 @@ def test_radam(sess):
         update_x = radam_opt.minimize(2 * x)  # constant grad 2
 
     sess.run(tf.variables_initializer(
-        tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='test_radam')),
-    )
+        tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='test_radam'),
+    ))
     for _ in range(4):
         sess.run(update_x)
 

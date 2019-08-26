@@ -38,7 +38,7 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
                     self._get_non_slot_variable("beta2_power", graph=graph),
                     self._get_non_slot_variable("steps", graph=graph))
 
-    # Override: use rectified_lr.
+    # Override: implement conditional update.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L149-L161
     def _apply_dense(self, grad, var):
         m = self.get_slot(var, "m")
@@ -54,7 +54,7 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
                 var, m, v,
                 beta1_power,
                 math_ops.cast(beta2_power, var.dtype.base_dtype),
-                math_ops.cast(self.rectified_lr, var.dtype.base_dtype),
+                math_ops.cast(self.rectified_lr, var.dtype.base_dtype),  # instead of _lr_t
                 beta1_t,
                 beta2_t,
                 math_ops.cast(self._epsilon_t, var.dtype.base_dtype),
@@ -68,19 +68,19 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
 
     def _apply_dense_without_v(self, var, m, v, beta1_power, beta1, beta2, grad):
         lr_t = math_ops.cast(self._lr_t, var.dtype.base_dtype)
-        v_t = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
+        update_v = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
 
         var_update = training_ops.apply_momentum(
             var,
             m,
-            lr_t / (1 - beta1_power),
-            grad * (1 - beta1),
+            lr_t / (1 - beta1_power),  # to adapt adam formula
+            grad * (1 - beta1),  # to adapt adam formula
             beta1,
             use_locking=self._use_locking,
         ).op
-        return control_flow_ops.group(var_update, v_t)
+        return control_flow_ops.group(var_update, update_v)
 
-    # Override: use rectified_lr.
+    # Override: implement conditional update.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L163-L175
     def _resource_apply_dense(self, grad, var):
         m = self.get_slot(var, "m")
@@ -96,7 +96,7 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
                 var.handle, m.handle, v.handle,
                 beta1_power,
                 math_ops.cast(beta2_power, grad.dtype.base_dtype),
-                math_ops.cast(self.rectified_lr, grad.dtype.base_dtype),
+                math_ops.cast(self.rectified_lr, grad.dtype.base_dtype),  # instead of _lr_t
                 beta1_t,
                 beta2_t,
                 math_ops.cast(self._epsilon_t, grad.dtype.base_dtype),
@@ -110,19 +110,19 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
 
     def _resource_apply_dense_without_v(self, var, m, v, beta1_power, beta1, beta2, grad):
         lr_t = math_ops.cast(self._lr_t, grad.dtype.base_dtype)
-        v_t = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
+        update_v = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
 
         var_update = training_ops.resource_apply_momentum(
             var,
             m,
-            lr_t / (1 - beta1_power),
-            grad * (1 - beta1),
+            lr_t / (1 - beta1_power),  # to adapt adam formula
+            grad * (1 - beta1),  # to adapt adam formula
             beta1,
             use_locking=self._use_locking,
         )
-        return control_flow_ops.group(var_update, v_t)
+        return control_flow_ops.group(var_update, update_v)
 
-    # Override: use rectified_lr.
+    # Override: implement conditional update.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L177-L203
     def _apply_sparse_shared(self, grad, var, indices, scatter_add):
         m = self.get_slot(var, "m")
@@ -159,7 +159,7 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         )
         return control_flow_ops.group(var_update, m_t, v_t)
 
-    # Override: update step as well
+    # Override: update step as well.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L221-L231
     def _finish(self, update_ops, name_scope):
         with ops.control_dependencies(update_ops):
