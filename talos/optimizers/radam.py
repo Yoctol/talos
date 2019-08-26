@@ -22,13 +22,9 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         x = tf.sqrt(N_sma_max / ((N_sma_max - 2.) * (N_sma_max - 4.)))
         _, beta2_power, steps = self._get_beta_accumulators()
         N_sma = N_sma_max - 2. * steps * beta2_power / (1. - beta2_power)
-        # just an approximation of update rule in paper.
-        self.rectifier = x * tf.cond(
-            tf.greater(N_sma, 4.),
-            lambda: tf.sqrt((N_sma - 4.) * (N_sma - 2.) / N_sma),
-            lambda: 1.,
-        )
+        self.rectifier = x * tf.sqrt((N_sma - 4.) * (N_sma - 2.) / N_sma)
         self.rectified_lr = self._lr_t * self.rectifier
+        self.condition = tf.greater(N_sma, 4.)
 
     # Override: return steps variable as well.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L111-L118
@@ -48,16 +44,41 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         m = self.get_slot(var, "m")
         v = self.get_slot(var, "v")
         beta1_power, beta2_power, _ = self._get_beta_accumulators()
+        beta1_power = math_ops.cast(beta1_power, var.dtype.base_dtype)
+        beta1_t = math_ops.cast(self._beta1_t, var.dtype.base_dtype)
+        beta2_t = math_ops.cast(self._beta2_t, var.dtype.base_dtype)
 
-        return training_ops.apply_adam(
-            var, m, v,
-            math_ops.cast(beta1_power, var.dtype.base_dtype),
-            math_ops.cast(beta2_power, var.dtype.base_dtype),
-            math_ops.cast(self.rectified_lr, var.dtype.base_dtype),
-            math_ops.cast(self._beta1_t, var.dtype.base_dtype),
-            math_ops.cast(self._beta2_t, var.dtype.base_dtype),
-            math_ops.cast(self._epsilon_t, var.dtype.base_dtype),
-            grad, use_locking=self._use_locking).op
+        return tf.cond(
+            self.condition,
+            lambda: training_ops.apply_adam(
+                var, m, v,
+                beta1_power,
+                math_ops.cast(beta2_power, var.dtype.base_dtype),
+                math_ops.cast(self.rectified_lr, var.dtype.base_dtype),
+                beta1_t,
+                beta2_t,
+                math_ops.cast(self._epsilon_t, var.dtype.base_dtype),
+                grad, use_locking=self._use_locking).op,
+            lambda: self._apply_dense_without_v(
+                var, m, v,
+                beta1_power,
+                beta1_t, beta2_t,
+                grad),
+        )
+
+    def _apply_dense_without_v(self, var, m, v, beta1_power, beta1, beta2, grad):
+        lr_t = math_ops.cast(self._lr_t, var.dtype.base_dtype)
+        v_t = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
+
+        var_update = training_ops.apply_momentum(
+            var,
+            m,
+            lr_t / (1 - beta1_power),
+            grad * (1 - beta1),
+            beta1,
+            use_locking=self._use_locking,
+        ).op
+        return control_flow_ops.group(var_update, v_t)
 
     # Override: use rectified_lr.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L163-L175
@@ -65,16 +86,41 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         m = self.get_slot(var, "m")
         v = self.get_slot(var, "v")
         beta1_power, beta2_power, _ = self._get_beta_accumulators()
+        beta1_power = math_ops.cast(beta1_power, grad.dtype.base_dtype)
+        beta1_t = math_ops.cast(self._beta1_t, grad.dtype.base_dtype)
+        beta2_t = math_ops.cast(self._beta2_t, grad.dtype.base_dtype)
 
-        return training_ops.resource_apply_adam(
-            var.handle, m.handle, v.handle,
-            math_ops.cast(beta1_power, grad.dtype.base_dtype),
-            math_ops.cast(beta2_power, grad.dtype.base_dtype),
-            math_ops.cast(self.rectified_lr, grad.dtype.base_dtype),
-            math_ops.cast(self._beta1_t, grad.dtype.base_dtype),
-            math_ops.cast(self._beta2_t, grad.dtype.base_dtype),
-            math_ops.cast(self._epsilon_t, grad.dtype.base_dtype),
-            grad, use_locking=self._use_locking)
+        return tf.cond(
+            self.condition,
+            lambda: training_ops.resource_apply_adam(
+                var.handle, m.handle, v.handle,
+                beta1_power,
+                math_ops.cast(beta2_power, grad.dtype.base_dtype),
+                math_ops.cast(self.rectified_lr, grad.dtype.base_dtype),
+                beta1_t,
+                beta2_t,
+                math_ops.cast(self._epsilon_t, grad.dtype.base_dtype),
+                grad, use_locking=self._use_locking),
+            lambda: self._resource_apply_dense_without_v(
+                var.handle, m.handle, v,
+                beta1_power,
+                beta1_t, beta2_t,
+                grad),
+        )
+
+    def _resource_apply_dense_without_v(self, var, m, v, beta1_power, beta1, beta2, grad):
+        lr_t = math_ops.cast(self._lr_t, grad.dtype.base_dtype)
+        v_t = v.assign_sub((1 - beta2) * (v - tf.square(grad)), use_locking=self._use_locking)
+
+        var_update = training_ops.resource_apply_momentum(
+            var,
+            m,
+            lr_t / (1 - beta1_power),
+            grad * (1 - beta1),
+            beta1,
+            use_locking=self._use_locking,
+        )
+        return control_flow_ops.group(var_update, v_t)
 
     # Override: use rectified_lr.
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L177-L203
@@ -84,12 +130,12 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         beta1_power, beta2_power, _ = self._get_beta_accumulators()
         beta1_power = math_ops.cast(beta1_power, var.dtype.base_dtype)
         beta2_power = math_ops.cast(beta2_power, var.dtype.base_dtype)
-        lr_t = math_ops.cast(self.rectified_lr, var.dtype.base_dtype)
+        lr_t = math_ops.cast(self._lr_t, var.dtype.base_dtype)
         beta1_t = math_ops.cast(self._beta1_t, var.dtype.base_dtype)
         beta2_t = math_ops.cast(self._beta2_t, var.dtype.base_dtype)
         epsilon_t = math_ops.cast(self._epsilon_t, var.dtype.base_dtype)
 
-        lr = (lr_t * math_ops.sqrt(1 - beta2_power) / (1 - beta1_power))
+        lr = lr_t / (1 - beta1_power)
 
         m_scaled_g_values = grad * (1 - beta1_t)
         m_t = state_ops.assign(m, m * beta1_t, use_locking=self._use_locking)
@@ -100,10 +146,18 @@ class RAdamOptimizer(tf.train.AdamOptimizer):
         v_t = state_ops.assign(v, v * beta2_t, use_locking=self._use_locking)
         with ops.control_dependencies([v_t]):
             v_t = scatter_add(v, indices, v_scaled_g_values)
-        v_sqrt = math_ops.sqrt(v_t)
-        var_update = state_ops.assign_sub(
-            var, lr * m_t / (v_sqrt + epsilon_t), use_locking=self._use_locking)
-        return control_flow_ops.group(*[var_update, m_t, v_t])
+        v_sqrt = tf.sqrt(v_t)
+
+        var_update = tf.cond(
+            self.condition,
+            lambda: var.assign_sub(
+                (lr * tf.sqrt(1 - beta2_power) * self.rectifier) * m_t / (v_sqrt + epsilon_t),
+                use_locking=self._use_locking),
+            lambda: var.assign_sub(
+                lr * m_t,
+                use_locking=self._use_locking),
+        )
+        return control_flow_ops.group(var_update, m_t, v_t)
 
     # Override: update step as well
     # https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/python/training/adam.py#L221-L231

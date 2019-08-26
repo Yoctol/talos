@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 from ..radam import RAdamOptimizer
@@ -5,18 +6,23 @@ from ..radam import RAdamOptimizer
 
 def test_radam(sess):
     radam_opt = RAdamOptimizer(0.1)
-    adam_opt = tf.train.AdamOptimizer(0.1)
     with tf.variable_scope('test_radam'):
         x = tf.Variable(1.)
-        update_x = radam_opt.minimize(x)  # constant grad 1
-        y = tf.Variable(1.)
-        update_y = adam_opt.minimize(y)  # constant grad 1
+        update_x = radam_opt.minimize(2 * x)  # constant grad 2
 
     sess.run(tf.variables_initializer(
         tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='test_radam')),
     )
-    for _ in range(5):
-        sess.run([update_x, update_y])
+    for _ in range(4):
+        sess.run(update_x)
 
-    x_val, y_val = sess.run([x, y])
-    assert x_val > y_val  # since updates of x is warming up
+    x_val = sess.run(x)
+    np.testing.assert_almost_equal(x_val, 1. - 4 * 0.1 * 2)  # without adaptive gradient
+
+    # N_sma > 4 now
+    rectifier, _ = sess.run([radam_opt.rectifier, update_x])
+    new_x_val = sess.run(x)
+    np.testing.assert_almost_equal(
+        new_x_val,
+        x_val - 0.1 * rectifier * 2 / 2,  # with adaptive gradient: divide by sqrt(v)
+    )
