@@ -5,6 +5,7 @@ url = "https://pypi.org/simple"
 
 [packages]
 talos = {editable = true, path = "."}
+werkzeug = ">=0.15.3"
 
 [dev-packages]
 pytest = "*"
