@@ -5,7 +5,8 @@ from ..radam import RAdamOptimizer
 
 
 def test_radam(sess):
-    radam_opt = RAdamOptimizer(0.1)
+    lr = 0.1
+    radam_opt = RAdamOptimizer(lr)
     with tf.variable_scope('test_radam'):
         x = tf.Variable(1.)
         update_x = radam_opt.minimize(2 * x)  # constant grad 2
@@ -17,12 +18,12 @@ def test_radam(sess):
         sess.run(update_x)
 
     x_val = sess.run(x)
-    np.testing.assert_almost_equal(x_val, 1. - 4 * 0.1 * 2)  # without adaptive gradient
+    np.testing.assert_almost_equal(x_val, 1. - 4 * lr * 2)  # without adaptive gradient
 
     # N_sma > 4 now
     rectifier, _ = sess.run([radam_opt.rectifier, update_x])
     new_x_val = sess.run(x)
     np.testing.assert_almost_equal(
         new_x_val,
-        x_val - 0.1 * rectifier * 2 / 2,  # with adaptive gradient: divide by sqrt(v)
+        x_val - lr * rectifier * 2 / 2,  # with adaptive gradient: divide by sqrt(v)
     )
