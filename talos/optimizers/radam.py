@@ -7,6 +7,7 @@ from tensorflow.python.training import training_ops
 
 
 class RAdamOptimizer(tf.train.AdamOptimizer):
+    '''Reference: https://arxiv.org/abs/1908.03265v1'''
 
     # Add-On: create steps variable.
     def _create_slots(self, var_list):
