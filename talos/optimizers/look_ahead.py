@@ -9,11 +9,11 @@ class LookAhead(tf.train.Optimizer):
             self,
             optimizer: tf.train.Optimizer,
             alpha: float = 0.5,
-            explore_step: int = 5,
+            explore_steps: int = 5,
         ):
         self.optimizer = optimizer
         self.alpha = alpha
-        self.explore_step = explore_step
+        self.explore_steps = explore_steps
         self.ema = tf.train.ExponentialMovingAverage(
             decay=1. - alpha,
             name="LookAheadSlowVariables",
@@ -30,7 +30,7 @@ class LookAhead(tf.train.Optimizer):
         with tf.control_dependencies([update_op]):
             finish_op = tf.cond(
                 tf.equal(
-                    tf.mod(global_step, self.explore_step),
+                    tf.mod(global_step, self.explore_steps),
                     0,
                 ),
                 lambda: self._slow_fast_updates(var_list),
