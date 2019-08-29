@@ -10,7 +10,10 @@ class LookAhead(tf.train.Optimizer):
             optimizer: tf.train.Optimizer,
             alpha: float = 0.5,
             explore_steps: int = 5,
+            use_locking: bool = False,
+            name: str = 'LookAhead',
         ):
+        super().__init__(use_locking, name)
         self.optimizer = optimizer
         self.alpha = alpha
         self.explore_steps = explore_steps
@@ -43,6 +46,9 @@ class LookAhead(tf.train.Optimizer):
     def _slow_fast_updates(self, var_list):
         with tf.control_dependencies([self.ema.apply(var_list)]):  # update slow
             return tf.group(*[
-                var.assign(self.ema.average(var))  # synchronize fast by slow
+                var.assign(
+                    self.ema.average(var),
+                    use_locking=self._use_locking,
+                )  # synchronize fast by slow
                 for var in var_list
             ])
