@@ -21,7 +21,7 @@ class WeightDecay(tf.train.Optimizer):
         var_list = [v for g, v in grads_and_vars if g is not None]
 
         decay_value = [
-            tf.cast(self.decay_rate_tensor, dtype=v.dtype) * v
+            tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype) * v
             for v in var_list
         ]
         with tf.control_dependencies(decay_value):  # cache the value before descent
