@@ -1,3 +1,5 @@
+from typing import Callable, Container, Union
+
 import tensorflow as tf
 
 
@@ -11,14 +13,25 @@ class WeightDecay(tf.train.Optimizer):
             decay_rate: float,
             use_locking: bool = False,
             name: str = 'WeightDecay',
+            variable_filter: Union[Container[tf.Variable], Callable[[tf.Variable], bool]]=None,
         ):
         super().__init__(use_locking, name)
         self.optimizer = optimizer
         self.decay_rate = decay_rate
         self.decay_rate_tensor = tf.convert_to_tensor(decay_rate)
+        self.variable_filter = variable_filter
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        var_list = [v for g, v in grads_and_vars if g is not None]
+        if self.variable_filter is None:
+            def need_decay(var):
+                return True
+        elif hasattr(self.variable_filter, '__contains__'):
+            def need_decay(var):
+                return var in self.variable_filter
+        else:
+            need_decay = self.variable_filter
+
+        var_list = [v for g, v in grads_and_vars if g is not None and need_decay(v)]
 
         decay_value = [
             tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype) * v
