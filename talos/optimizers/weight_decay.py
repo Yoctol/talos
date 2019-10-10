@@ -13,7 +13,7 @@ class WeightDecay(tf.train.Optimizer):
             decay_rate: float,
             use_locking: bool = False,
             name: str = 'WeightDecay',
-            variable_filter: Union[Container[tf.Variable], Callable[[tf.Variable], bool]]=None,
+            variable_filter: Union[Container[tf.Variable], Callable[[tf.Variable], bool]] = None,
         ):
         super().__init__(use_locking, name)
         self.optimizer = optimizer
