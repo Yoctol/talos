@@ -22,21 +22,7 @@ class WeightDecay(tf.train.Optimizer):
         self.variable_filter = variable_filter
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        if self.variable_filter is None:
-            def need_decay(var):
-                return True
-        elif hasattr(self.variable_filter, '__contains__'):
-            def need_decay(var):
-                return var in self.variable_filter
-        else:
-            need_decay = self.variable_filter
-
-        var_list = [v for g, v in grads_and_vars if g is not None and need_decay(v)]
-
-        decay_value = [
-            tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype) * v
-            for v in var_list
-        ]
+        var_list, decay_value = self._get_decay_pairs(grads_and_vars)
         with tf.control_dependencies(decay_value):  # cache the value before descent
             grad_descent_op = self.optimizer.apply_gradients(
                 grads_and_vars,
@@ -53,3 +39,20 @@ class WeightDecay(tf.train.Optimizer):
             )
 
         return decay_op
+
+    def _get_decay_pairs(self, grads_and_vars):
+        if self.variable_filter is None:
+            def need_decay(var):
+                return True
+        elif hasattr(self.variable_filter, '__contains__'):
+            def need_decay(var):
+                return var in self.variable_filter
+        else:
+            need_decay = self.variable_filter
+
+        var_list = [v for g, v in grads_and_vars if g is not None and need_decay(v)]
+        decay_value = [
+            tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype) * v
+            for v in var_list
+        ]
+        return var_list, decay_value
