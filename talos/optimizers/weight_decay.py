@@ -14,12 +14,14 @@ class WeightDecay(tf.train.Optimizer):
             use_locking: bool = False,
             name: str = 'WeightDecay',
             variable_filter: Union[Container[tf.Variable], Callable[[tf.Variable], bool]] = None,
+            sparse_update: bool = True,
         ):
         super().__init__(use_locking, name)
         self.optimizer = optimizer
         self.decay_rate = decay_rate
         self.decay_rate_tensor = tf.convert_to_tensor(decay_rate)
         self.variable_filter = variable_filter
+        self.sparse_update = sparse_update
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         var_list, decay_value = self._get_decay_pairs(grads_and_vars)
@@ -50,9 +52,20 @@ class WeightDecay(tf.train.Optimizer):
         else:
             need_decay = self.variable_filter
 
-        var_list = [v for g, v in grads_and_vars if g is not None and need_decay(v)]
-        decay_value = [
-            tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype) * v
-            for v in var_list
-        ]
-        return var_list, decay_value
+        var_list, decay_list = [], []
+        for g, v in grads_and_vars:
+            if g is None or not need_decay(v):
+                continue
+            var_list.append(v)
+            if self.sparse_update and isinstance(g, tf.IndexedSlices):
+                decay_value = tf.IndexedSlices(
+                    values=tf.gather(v, g.indices),
+                    indices=g.indices,
+                    dense_shape=g.dense_shape,
+                )
+            else:
+                decay_value = v
+            rate = tf.cast(self.decay_rate_tensor, dtype=v.dtype.base_dtype)
+            decay_list.append(tf.math.scalar_mul(rate, decay_value))
+
+        return var_list, decay_list
