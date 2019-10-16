@@ -52,3 +52,31 @@ def test_weight_decay_with_filter(var_filter, sess):
         sess.run(z),
         z_val - lr,
     )  # doesn't decay since it's not in filter
+
+
+def test_sparse_weight_decay(sess):
+    lr, decay_rate = 0.2, 0.1
+    E_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    x = tf.constant([[0, 1, 1]])
+    E = tf.Variable(E_val, dtype=tf.float32, name='E')
+
+    optimizer = WeightDecay(
+        tf.train.GradientDescentOptimizer(lr),
+        decay_rate=decay_rate,
+        sparse_update=True,
+    )
+    e = tf.nn.embedding_lookup(E, x)
+    y = tf.pow(e, 3)  # dy/de = 3e^2
+    train_op = optimizer.minimize(y, var_list=[E])
+
+    sess.run(E.initializer)
+    sess.run(train_op)
+    np.testing.assert_array_almost_equal(
+        sess.run(E),
+        [
+            E_val[0] * (1 - decay_rate) - lr * (3 * E_val[0] ** 2),  # occurrence 1
+            E_val[1] * (1 - 2 * decay_rate) - 2 * lr * (3 * E_val[1] ** 2),  # occurrence 2
+            E_val[2],
+        ],
+        decimal=4,
+    )
