@@ -1,21 +1,21 @@
 language: python
 
-cache: pip
-
 python:
-- '3.6'
-- 'nightly'
+  - "3.6"
 
-matrix:
-  allow_failures:
-  - python: 'nightly'
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install pandoc -y
 
+# command to install dependencies
 install:
-- make install
+  - pip install pipenv==2018.10.13
+  - pipenv run make install-dev
 
+# command to run tests
 script:
-- make lint
-- make test
+  - pipenv run make lint
+  - pipenv run make test
 
 deploy:
   provider: pypi
@@ -23,8 +23,7 @@ deploy:
   password:
     secure: ""
   distributions: sdist bdist_wheel
-  skip_upload_docs: true
+  skip_cleanup: true
   on:
     tags: true
-    python:
-      - 3.6
+    python: 3.6
