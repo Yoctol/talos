@@ -1,9 +1,14 @@
 # talos
 
-[![CircleCI][circleci-image]][circleci-url]
+[![travis][travis-image]][travis-url]
+[![pypi][pypi-image]][pypi-url]
+![release][release-image]
 
-[circleci-image]: https://circleci.com/gh/Yoctol/talos.svg?style=shield&circle-token=20e0cbfda638b10e16b0f911708886e8112f4783
-[circleci-url]: https://circleci.com/gh/Yoctol/talos
+[travis-image]: https://img.shields.io/travis/Yoctol/talos.svg?style=flat
+[travis-url]: https://travis-ci.org/Yoctol/talos
+[pypi-image]: https://img.shields.io/pypi/v/talos.svg?style=flat
+[pypi-url]: https://pypi.python.org/pypi/talos
+[release-image]: https://img.shields.io/github/release/Yoctol/talos.svg
 
 
 About this project...
