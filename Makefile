@@ -4,9 +4,11 @@ TARGET = talos
 
 .PHONY: install
 install:
-	pip install -U pip wheel setuptools
-	pip install -r requirements.txt
-	pip install -e .
+	pipenv install
+
+.PHONY: install-dev
+install-dev:
+	pipenv install --dev
 
 .PHONY: lint
 lint:
