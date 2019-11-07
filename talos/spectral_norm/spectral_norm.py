@@ -2,11 +2,7 @@ import types
 from typing import Set
 
 import tensorflow as tf
-from tensorflow.python.keras.layers.cudnn_recurrent import (
-    _CuDNNRNN,
-    CuDNNGRU,
-    CuDNNLSTM,
-)
+from tensorflow.python.keras.layers.cudnn_recurrent import _CuDNNRNN
 
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
@@ -36,21 +32,7 @@ def add_spectral_norm(layer: tf.layers.Layer):
 def add_spectral_norm_for_layer(
         layer: tf.layers.Layer,
         kernel_name: Set[str] = None,
-    ):
-    if isinstance(layer, (CuDNNGRU, tf.keras.layers.GRUCell)):
-        weight_split = 3
-    elif isinstance(layer, (CuDNNLSTM, tf.keras.layers.LSTMCell)):
-        weight_split = 4
-    else:
-        weight_split = 1
-
-    _add_spectral_norm_for_layer(layer, kernel_name, weight_split=weight_split)
-
-
-def _add_spectral_norm_for_layer(
-        layer: tf.layers.Layer,
-        kernel_name: Set[str] = None,
-        weight_split: int = 1,
+        lipschitz: float = 1.,
     ):
     if layer.built:
         raise ValueError("Can't add spectral norm on built layer!")
@@ -73,33 +55,13 @@ def _add_spectral_norm_for_layer(
             raise ValueError("Can't apply spectral norm on variable rank < 2!")
 
         kernel_matrix = to_rank2(kernel)  # shape (U, V)
-        if weight_split > 1:
-            assert shape[1] % weight_split == 0
-            split_kernel = tf.split(kernel_matrix, weight_split, axis=1)
-            sn_list = []
-            for i, sub_kernel in enumerate(split_kernel):
-                sn_val, update_u = _build_spectral_norm_variables(
-                    f"{name}_{i}",
-                    sub_kernel,
-                    original_add_weight,
-                )
-                sn_list.append(
-                    tf.fill([sub_kernel.shape[1].value], value=sn_val),
-                )  # shape (V // split)
-                self.add_update(update_u)
+        spectral_norm, update_u = _build_spectral_norm_variables(
+            name, kernel_matrix, original_add_weight,
+        )  # shape ()
+        self.add_update(update_u)
 
-            spectral_norm = tf.concat(sn_list, axis=0)  # shape (V)
-        else:
-            spectral_norm, update_u = _build_spectral_norm_variables(
-                name, kernel_matrix, original_add_weight,
-            )  # shape ()
-            self.add_update(update_u)
-
-        normed_kernel = tf.truediv(
-            kernel,
-            spectral_norm + tf.keras.backend.epsilon(),
-            name=f'{name}_sn',
-        )
+        scale = lipschitz / (spectral_norm + tf.keras.backend.epsilon())
+        normed_kernel = tf.multiply(kernel, scale, name=f'{name}_sn')
         return normed_kernel
 
     layer.add_weight = types.MethodType(new_add_weight, layer)
