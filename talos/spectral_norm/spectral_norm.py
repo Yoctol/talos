@@ -54,10 +54,7 @@ def add_spectral_norm_for_layer(
         if len(shape) < 2:
             raise ValueError("Can't apply spectral norm on variable rank < 2!")
 
-        kernel_matrix = to_rank2(kernel)  # shape (U, V)
-        spectral_norm, update_u = _build_spectral_norm_variables(
-            name, kernel_matrix, original_add_weight,
-        )  # shape ()
+        spectral_norm, update_u = _build_spectral_norm_variables(name, kernel, original_add_weight)
         self.add_update(update_u)
 
         scale = lipschitz / (spectral_norm + tf.keras.backend.epsilon())
@@ -67,8 +64,8 @@ def add_spectral_norm_for_layer(
     layer.add_weight = types.MethodType(new_add_weight, layer)
 
 
-def _build_spectral_norm_variables(name, kernel, add_weight_func):
-    assert kernel.shape.ndims == 2
+def _build_spectral_norm_variables(name, kernel, add_weight_func=tf.get_variable):
+    kernel = to_rank2(kernel)  # shape (U, V)
     u_vector = add_weight_func(
         name=f'{name}/left_singular_vector',
         shape=(kernel.shape[0].value, ),
@@ -81,12 +78,12 @@ def _build_spectral_norm_variables(name, kernel, add_weight_func):
         tf.nn.l2_normalize(tf.linalg.matvec(kernel, u_vector, transpose_a=True)),
         name=f'{name}/new_right_singular_vector',
     )  # shape (V)
-    unnormed_new_u = tf.linalg.matvec(kernel, new_v)  # shape (U)
+    Wv = tf.linalg.matvec(kernel, new_v)  # shape (U)
     new_u = tf.stop_gradient(
-        tf.nn.l2_normalize(unnormed_new_u),
+        tf.nn.l2_normalize(Wv),
         name=f'{name}/new_left_singular_vector',
-    )
-    spectral_norm = tf.reduce_sum(new_u * unnormed_new_u, name=f'{name}/singular_value')
+    )  # shape (U)
+    spectral_norm = tf.tensordot(new_u, Wv, axes=1, name=f'{name}/singular_value')
     update_u = tf.assign(u_vector, new_u, name=f'{name}/power_iter')
     return spectral_norm, update_u
 
