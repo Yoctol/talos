@@ -4,6 +4,11 @@ import tensorflow as tf
 
 
 class SpectralWeightDecay(tf.train.Optimizer):
+    '''
+    References:
+        1. Decouple Weight Decay https://arxiv.org/abs/1711.05101
+        2. Spectral Regularization https://arxiv.org/abs/1705.10941
+    '''
 
     def __init__(
             self,
@@ -28,12 +33,13 @@ class SpectralWeightDecay(tf.train.Optimizer):
             )
 
         # guarantee compute before decay.
-        with tf.control_dependencies([grad_descent_op] + update_list):
+        with tf.control_dependencies([grad_descent_op]):
             decay_op = tf.group(
                 *[
                     v.assign_sub(d_v, use_locking=self._use_locking)
                     for v, d_v in zip(var_list, decay_value)
                 ],
+                *update_list,
                 name=name,
             )
 
@@ -75,12 +81,14 @@ class SpectralWeightDecay(tf.train.Optimizer):
         )  # shape (U)
         v = tf.nn.l2_normalize(tf.linalg.matvec(kernel_matrix, u, transpose_a=True))  # shape (V)
         Wv = tf.linalg.matvec(kernel_matrix, v)  # shape (U)
-        new_u = tf.nn.l2_normalize(Wv)  # shape (U)
-        # NOTE sigma u v^T = (sigma u) v^T = Wv v^T
+        # NOTE
+        # sigma = u^T W v -> dsigma / dW = uv^T
+        # 0.5 dsigma^2 / dW = sigma u v^T = (sigma u) v^T = Wv v^T
         decay_value = Wv[:, tf.newaxis] * v  # shape (U, V)
         if kernel.shape.ndims > 2:
             decay_value = tf.reshape(decay_value, kernel.shape)
 
+        new_u = tf.nn.l2_normalize(Wv)  # shape (U)
         update_u = tf.assign(u, new_u)
         return decay_value, update_u
 
