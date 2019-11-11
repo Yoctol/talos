@@ -82,7 +82,7 @@ def test_add_spectral_norm(layer, inputs, sess):
     u_vector_list = layer.non_trainable_variables
 
     # Since norm come from division
-    assert all([kernel.op.type == 'RealDiv' for kernel in kernel_list])
+    assert all([kernel.op.type == 'Mul' for kernel in kernel_list])
 
     sess.run(tf.variables_initializer(layer.variables))
 
