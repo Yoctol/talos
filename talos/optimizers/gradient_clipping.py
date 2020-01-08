@@ -3,7 +3,7 @@ import tensorflow as tf
 
 class GradientClipping(tf.train.Optimizer):
 
-    _ALLOWED_CLIP_BY = {'value', 'norm'}
+    _ALLOWED_CLIP_BY = {'value', 'norm', 'global_norm'}
 
     def __init__(
             self,
@@ -25,10 +25,21 @@ class GradientClipping(tf.train.Optimizer):
         self.clip_by = clip_by
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
-        processed_gvs = [
-            (self._process_grad(g), v) for g, v in grads_and_vars
-            if g is not None
-        ]
+        if self.clip_by == 'global_norm':
+            gs, vs = [], []
+            for g, v in grads_and_vars:
+                if g is not None:
+                    gs.append(g)
+                    vs.append(v)
+
+            clipped_g, _ = tf.clip_by_global_norm(gs, clip_norm=self.value)
+            processed_gvs = list(zip(clipped_g, vs))
+        else:
+            processed_gvs = [
+                (self._process_grad(g), v) for g, v in grads_and_vars
+                if g is not None
+            ]
+
         return self.optimizer.apply_gradients(
             processed_gvs,
             global_step=global_step,
