@@ -1,27 +1,20 @@
 language: python
-
 python:
-  - "3.6"
-
+- '3.6'
 before_install:
-  - sudo apt-get update
-  - sudo apt-get install pandoc -y
-
-# command to install dependencies
+- sudo apt-get update
+- sudo apt-get install pandoc -y
 install:
-  - pip install pipenv==2018.10.13
-  - pipenv run make install-dev
-
-# command to run tests
+- pip install pipenv==2018.10.13
+- pipenv run make install-dev
 script:
-  - pipenv run make lint
-  - pipenv run make test
-
+- pipenv run make lint
+- pipenv run make test
 deploy:
   provider: pypi
-  user: jsaon
+  user: noobOriented
   password:
-    secure: ""
+    secure: rBuh7uQRhAy79nJM/7gQDJZh12MDqqb++NgQBU2FPNb0vXt0lVwNwW8bLD2bDSC/16Ays2FrtfzwEHAy1/1qfb/oV3yKuygXwfBHaWc6T+4ERsNkTw+oIKb2yaFOvAXrvSIsV6nkRFdxa3vbSz2TDo0ldjhXzfpvHV1oY9EE/5VK4B635MVRKKCzABplyTjkVVM1dU7vly8mUCUAnIYb9sUSfNjgm4It9ilrng+1V3m5T0YT9f3UBZKbpyzytBJR8tVmzFMPZnf80mW+s2l3eC0qeWoDrEK2nozwTOfFFdcBh7Du59S6Odn0TGo+utVylX1Dos0JF4tfSMWgnwUehqeMXeC0HiTiJAri+g1Geo9M83m9oJayr2W07jWjELcz1RvcFHycp7Qos6lGg8oZm8+ARGz2EPyhG4I17DQpu7WXrvSc9RU+AbPnt11N3WZOrhEs5UTjDlc6IbxBQoNwiNoEtsuYRY/w6H24LlAb5y3b59kub64fEwTYiND+y7URhUKnlLcokqzQfvXsH1+B7xhag0X751G11TLGhDlL1xnHzaKw7ddkwpfHEPMViY0VQWyeMaFNLA4vjhCx6GRVzEZ1Wy6To7Prxq0XwFQCR3wYtBL0P+nvqfnbQlp+Qrjbdw3kPxPQrdJmPcw0zNFnlzvFqsgeHAt7UyAVTUT6l3s=
   distributions: sdist bdist_wheel
   skip_cleanup: true
   on:
