@@ -14,7 +14,7 @@ else:
     long_description = '-'
 
 REQUIRED_PACKAGES = [
-    'tensorflow==1.13.1',
+    'tensorflow==2.3.1',
 ]
 
 about = {}
